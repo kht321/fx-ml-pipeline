@@ -1,0 +1,3 @@
+default: ["EUR_USD", "GBP_USD"]
+scalping: ["EUR_USD", "GBP_USD", "USD_JPY"]
+macro: ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CHF"]

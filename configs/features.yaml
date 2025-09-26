@@ -1,0 +1,13 @@
+features:
+  ret_1:
+    window: 1
+    description: "1-tick percentage return"
+  roll_mean_5:
+    window: 5
+    description: "Change in 5-sample rolling mean"
+  roll_vol_20:
+    window: 20
+    description: "Rolling volatility of returns"
+label:
+  horizon: 5
+  description: "Binary label: 1 if mid-price rises within 5 ticks"
