@@ -12,6 +12,7 @@ requires-python = ">=3.9"
 dependencies = [
   "python-dotenv",
   "oandapyV20",
+  "requests",
   "pandas",
   "numpy",
   "scikit-learn"

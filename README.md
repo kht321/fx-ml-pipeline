@@ -42,20 +42,25 @@ oanda-fx-ml/
    export $(grep -v '^#' .env | xargs)
    ```
 
-3. **Stream prices and build features**
+3. **Prepare data directories**
    ```bash
-   python src/stream_prices.py EUR_USD GBP_USD \
+   mkdir -p data/raw data/proc
+   ```
+
+4. **Stream prices and build features**
+   ```bash
+   python src/stream_prices.py EUR_USD USD_SGD \
      | python src/build_features.py \
      > data/proc/eu_gb_features.csv
    ```
 
-4. **Fetch historical data**
+5. **Fetch historical data**
    ```bash
    python src/fetch_candles.py EUR_USD M1 500 > data/raw/eurusd_m1.json
    python src/fetch_orderbook.py EUR_USD > data/raw/eurusd_orderbook.json
    ```
 
-5. **Train the baseline model**
+6. **Train the baseline model**
    ```bash
    python src/train_baseline.py data/proc/eu_gb_features.csv
    ```
