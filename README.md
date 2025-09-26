@@ -1,6 +1,6 @@
-# OANDA FX ML Pipeline
+# OANDA SGD FX ML Pipeline
 
-This repository streams FX prices from the OANDA v20 API, engineers basic features, and trains a baseline logistic regression model for price direction classification. The pipeline is intentionally lightweight so you can run experiments quickly against a practice account.
+This repository streams FX prices from the OANDA v20 API with an emphasis on tracking Singapore dollar crosses, engineers basic features, and trains a baseline logistic regression model for price direction classification. The pipeline is intentionally lightweight so you can run SGD vs. G10 experiments quickly against a practice account.
 
 ## Project Layout
 
@@ -47,22 +47,23 @@ oanda-fx-ml/
    mkdir -p data/raw data/proc
    ```
 
-4. **Stream prices and build features**
+4. **Stream SGD vs majors and build features**
    ```bash
-   python src/stream_prices.py EUR_USD USD_SGD \
+   python src/stream_prices.py USD_SGD EUR_USD GBP_USD \
      | python src/build_features.py \
-     > data/proc/eu_gb_features.csv
+     > data/proc/sgd_vs_majors.csv
    ```
 
 5. **Fetch historical data**
    ```bash
+   python src/fetch_candles.py USD_SGD M1 500 > data/raw/usdsgd_m1.json
    python src/fetch_candles.py EUR_USD M1 500 > data/raw/eurusd_m1.json
    python src/fetch_orderbook.py EUR_USD > data/raw/eurusd_orderbook.json
    ```
 
 6. **Train the baseline model**
    ```bash
-   python src/train_baseline.py data/proc/eu_gb_features.csv
+   python src/train_baseline.py data/proc/sgd_vs_majors.csv
    ```
    The script prints a JSON summary that includes the classification report and model coefficients.
 
@@ -72,4 +73,5 @@ oanda-fx-ml/
 - Candle fetches use the `InstrumentsCandles` endpoint with price types `M`, `B`, and `A` for midpoint/bid/ask.
 - Order book snapshots come from `InstrumentsOrderBook`.
 - The feature builder expects newline-delimited price ticks from `stream_prices.py` on `stdin`.
-- Update `configs/` to manage the instruments tracked and feature engineering assumptions.
+- Update `configs/` to manage the instruments tracked and feature engineering assumptions; the default profiles include SGD-centric groupings.
+- Order book snapshots are only published for a subset of major pairs (e.g. `EUR_USD`, `GBP_USD`, `USD_JPY`).

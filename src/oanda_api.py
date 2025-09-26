@@ -1,7 +1,7 @@
 """Client helpers for interacting with the OANDA v20 REST API."""
 
 import os
-from typing import Generator, Iterable, Tuple
+from typing import Dict, Generator, Iterable, Tuple
 
 from dotenv import load_dotenv
 import oandapyV20
@@ -16,14 +16,16 @@ API = oandapyV20.API(
 )
 
 
-def stream_prices(account_id: str, instruments: Iterable[str]) -> Generator[Tuple[str, dict], None, None]:
+def stream_prices(account_id: str, instruments: Iterable[str]) -> Generator[Tuple[str, Dict[str, object]], None, None]:
     """Yield streaming price messages for the requested instruments."""
 
     params = {"instruments": ",".join(instruments)}
     request = PricingStream(accountID=account_id, params=params)
 
-    for msg_type, msg in API.request(request):
-        yield msg_type, msg
+    for message in API.request(request):
+        # API.request yields dicts with a 'type' key like 'PRICE' or 'HEARTBEAT'
+        msg_type = str(message.get("type", "")).lower()
+        yield msg_type, message
 
 
 def fetch_candles(instrument: str, granularity: str = "M1", count: int = 500) -> dict:
