@@ -12,7 +12,8 @@ oanda-fx-ml/
 │   └── pairs.yaml
 ├── data/
 │   ├── bronze/
-│   │   ├── news/
+│   │   ├── news/          # Live drop folder watched by process_news.py
+│   │   ├── news_corpus/    # Synthetic corpus replayed by simulate_news_feed.py
 │   │   ├── orderbook/
 │   │   └── prices/
 │   ├── silver/
@@ -35,6 +36,34 @@ oanda-fx-ml/
 ```
 
 ## Getting Started
+
+## Pipeline Overview
+
+```mermaid
+flowchart TD
+    subgraph Bronze
+        BPrice[Price stream
+(usd_sgd_stream.ndjson)]
+        BNews[News drop folder
+(data/bronze/news/)]
+    end
+    subgraph Silver
+        SPrice[Silver price features
+(sgd_vs_majors.csv)]
+        SNews[Silver news features
+(news_features.csv)]
+    end
+    subgraph Gold
+        GoldSet[Gold training set
+(sgd_vs_majors_training.csv)]
+    end
+    BPrice -->|build_features.py| SPrice
+    BNews -->|process_news.py| SNews
+    SPrice -->|build_training_set.py| GoldSet
+    SNews -->|build_training_set.py| GoldSet
+    GoldSet -->|train_baseline.py| Model[Baseline model + metrics]
+    Model --> Frontend[Frontend / API predictions]
+```
 
 1. **Install dependencies**
    ```bash
@@ -101,6 +130,30 @@ oanda-fx-ml/
    ```
    The command prints a classification report and stores the fitted scaler + model bundle for downstream use.
 
+## Simulating News-driven Predictions
+
+1. Start the price stream and feature builder in separate terminals so the Silver price table refreshes continuously.
+   ```bash
+   python src/stream_prices.py USD_SGD EUR_USD GBP_USD \
+     --bronze-path data/bronze/prices/usd_sgd_stream.ndjson \
+     --log-every 25 --include-heartbeats
+   python src/build_features.py \
+     --input data/bronze/prices/usd_sgd_stream.ndjson \
+     --output data/silver/prices/sgd_vs_majors.csv \
+     --flush-interval 50 --log-every 50
+   ```
+2. Ingest news in real time by dripping the corpus into the live folder. The helper copies each story, re-runs `process_news.py`, and (optionally) rebuilds Gold + refreshes the baseline model so your UI can pull the latest signal.
+   ```bash
+   python src/simulate_news_feed.py \
+     --corpus data/bronze/news_corpus \
+     --target data/bronze/news \
+     --silver-path data/silver/news/news_features.csv \
+     --rebuild-gold --retrain --interval 20 --jitter 15 \
+     --model-output data/gold/models/logreg_live.pkl
+   ```
+   The command emits timestamps when each headline lands, runs the ingestion scripts, and sleeps between drops to mimic irregular arrival times.
+3. Attach your front-end or monitoring job to `data/gold/models/logreg_live.pkl` (model + scaler bundle) and/or the JSON output of `train_baseline.py` to display the latest direction probabilities as news arrives.
+
 ## News Ingestion Notes
 
 - `src/process_news.py` supports plain-text or JSON files. JSON documents can expose keys such as `headline`, `body`, `published_at`, and `source`; missing metadata falls back to file timestamps.
@@ -111,6 +164,22 @@ oanda-fx-ml/
 
 - Every module under `src/` now carries detailed module- and function-level docstrings that explain the role of each component in the medallion architecture.
 - Inline comments call out non-obvious implementation choices (e.g. incremental flush thresholds, sparse-aware scaling) so future contributors can reason about the design quickly.
+
+## Feature Reference
+
+- **Bronze layer artefacts**
+  - `data/bronze/prices/usd_sgd_stream.ndjson` logs every tick with the full bid/ask ladder, closeout quotes, tradeable flags, and instrument metadata. Candle dumps such as `usdsgd_m1.json`/`eurusd_m1.json` follow the `InstrumentsCandles` schema (`candles[].mid/bid/ask`, `volume`, `time`, `complete`), while order-book captures (e.g. `eurusd_orderbook.json`) preserve depth snapshots. The curated corpus in `data/bronze/news_corpus/` (five synthetic SGD-relevant stories) seeds the sentiment pipeline and can be replayed into `data/bronze/news/` via `simulate_news_feed.py`.
+- **Silver price features** (`data/silver/prices/sgd_vs_majors.csv`) contain `time`, `instrument`, `mid`, `spread`, `ret_1`, `ret_5`, `roll_vol_20`, `zscore_20`, `bid_liquidity`, `ask_liquidity`, and the binary label `y`. Rows are flushed incrementally as the streaming buffer reaches the configured window length.
+- **Silver news features** (`data/silver/news/news_features.csv`) record `story_id`, `headline`, `published_at`, `source`, lexical counts (`word_count`, `unique_word_count`, `positive_hits`, `negative_hits`), the normalised `sentiment_score`, SGD-specific flags (`mentions_sgd`, `mas_mentions`), and `currency_mentions`.
+- **Gold training table** (`data/gold/training/sgd_vs_majors_training.csv`) preserves all Silver price fields and appends contextual columns: `news_sentiment_score`, `news_mentions_sgd`, `news_word_count`, `news_age_minutes`, `news_story_id`, `news_headline`, `news_source`, and the aligned `published_at`. When no qualifying headline is found, neutral defaults (0 sentiment / counts, NULL identifiers) are injected so the design matrix remains dense.
+
+## Data Cleaning & Feature Engineering Flow
+
+- `stream_prices.py` validates credentials, can archive every message to Bronze, and streams progress/heartbeat counts to stderr for long-running capture jobs.
+- `build_features.py` strips invalid JSON lines, coerces timestamps to UTC, sorts ticks per instrument, and engineers mid-price statistics (returns, spreads, rolling volatility, z-scores) plus level-one liquidity. Rows lacking sufficient history are dropped; only new slices are appended to Silver to avoid rewriting large files.
+- `process_news.py` normalises text/JSON structures, falls back to file mtimes when publication metadata is missing, tokenises content for lexicon counts, and leverages a manifest to prevent reprocessing.
+- `build_training_set.py` parses the optional `currency_mentions`, filters news by instrument legs (and SGD by default), then executes an as-of merge within a configurable tolerance. Missing matches are filled with neutral values while retaining timing metadata for downstream joins.
+- `train_baseline.py` removes non-modelling columns, one-hot encodes categoricals, fills NA with zeros, applies a sparse-friendly scaler, trains logistic regression, and persists the `(model, scaler, feature list)` bundle alongside JSON diagnostics.
 
 ## Extending the Pipeline
 
