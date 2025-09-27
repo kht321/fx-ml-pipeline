@@ -54,7 +54,8 @@ oanda-fx-ml/
    ```bash
    # Stream live prices and archive raw ticks
    python src/stream_prices.py USD_SGD EUR_USD GBP_USD \
-     --bronze-path data/bronze/prices/usd_sgd_stream.ndjson
+     --bronze-path data/bronze/prices/usd_sgd_stream.ndjson \
+     --max-ticks 200 --log-every 25
 
    # Fetch historical candles
    python src/fetch_candles.py USD_SGD --granularity M1 --count 2000 \
@@ -73,7 +74,8 @@ oanda-fx-ml/
    # Promote price ticks to engineered features
    python src/build_features.py \
      --input data/bronze/prices/usd_sgd_stream.ndjson \
-     --output data/silver/prices/sgd_vs_majors.csv
+     --output data/silver/prices/sgd_vs_majors.csv \
+     --flush-interval 50 --log-every 50
 
    # Convert curated news into numeric sentiment features
    python src/process_news.py \
@@ -104,6 +106,11 @@ oanda-fx-ml/
 - `src/process_news.py` supports plain-text or JSON files. JSON documents can expose keys such as `headline`, `body`, `published_at`, and `source`; missing metadata falls back to file timestamps.
 - Feature extraction currently uses a lightweight lexicon for sentiment and tags Singapore-related terms. Replace the heuristics or extend the script to call your preferred LLM service when you are ready for richer embeddings.
 - Processed rows append to `data/silver/news/news_features.csv` and are tracked via `data/bronze/news/.processed.json` to prevent duplicate ingestion.
+
+## Code Annotations
+
+- Every module under `src/` now carries detailed module- and function-level docstrings that explain the role of each component in the medallion architecture.
+- Inline comments call out non-obvious implementation choices (e.g. incremental flush thresholds, sparse-aware scaling) so future contributors can reason about the design quickly.
 
 ## Extending the Pipeline
 

@@ -1,4 +1,10 @@
-"""Promote Silver price & news features into a Gold training table."""
+"""Promote Silver price & news features into a Gold training table.
+
+The Gold layer needs a single, analysis-ready table that combines market
+features with contextual sentiment signals. This utility merges the two Silver
+feeds using an as-of join so each price observation carries the most recent
+relevant news headline within a configurable lookback window.
+"""
 
 import argparse
 import sys
@@ -10,6 +16,7 @@ import pandas as pd
 
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
+    """Build the argument parser so callers can configure inputs/outputs."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--price-features",
@@ -38,12 +45,14 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 
 def parse_currency_mentions(value: str) -> Set[str]:
+    """Split the comma-delimited currency codes into a comparable set."""
     if not value or pd.isna(value):
         return set()
     return {token.strip().upper() for token in str(value).split(",") if token.strip()}
 
 
 def prepare_news_frame(path: Path) -> pd.DataFrame:
+    """Load engineered news features and precompute helper columns."""
     if not path.exists():
         return pd.DataFrame()
 
@@ -59,6 +68,7 @@ def prepare_news_frame(path: Path) -> pd.DataFrame:
 
 
 def filter_instrument_news(news_df: pd.DataFrame, instrument: str) -> pd.DataFrame:
+    """Restrict the news feed to headlines that mention the instrument legs."""
     if news_df.empty:
         return news_df
 
@@ -70,6 +80,7 @@ def filter_instrument_news(news_df: pd.DataFrame, instrument: str) -> pd.DataFra
 
 
 def join_news(price_df: pd.DataFrame, news_df: pd.DataFrame, tolerance: str) -> pd.DataFrame:
+    """Perform an as-of merge matching each price row to the latest headline."""
     if price_df.empty:
         return price_df
 
@@ -90,6 +101,8 @@ def join_news(price_df: pd.DataFrame, news_df: pd.DataFrame, tolerance: str) -> 
     merged_frames: List[pd.DataFrame] = []
     td = pd.to_timedelta(tolerance)
 
+    # Process each instrument separately to guarantee we only merge against the
+    # subset of headlines that talk about its component currencies.
     for instrument, group in price_df.groupby("instrument"):
         relevant_news = filter_instrument_news(news_df, instrument)
         if relevant_news.empty:
@@ -149,6 +162,7 @@ def join_news(price_df: pd.DataFrame, news_df: pd.DataFrame, tolerance: str) -> 
 
 
 def main(argv: Iterable[str] | None = None) -> None:
+    """Wire parsing, loading, joining, and final persistence together."""
     args = parse_args(argv or sys.argv[1:])
 
     if not args.price_features.exists():

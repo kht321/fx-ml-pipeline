@@ -1,4 +1,9 @@
-"""Fetch historical candles from OANDA and persist them to the Bronze layer."""
+"""Fetch historical candles from OANDA and persist them to the Bronze layer.
+
+This CLI wrapper exists so analysts can snapshot the market state on demand
+without writing API boilerplate each time. It emits the raw JSON payload OANDA
+returns so downstream transforms have the full fidelity data available.
+"""
 
 import argparse
 import json
@@ -10,6 +15,7 @@ from oanda_api import fetch_candles
 
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
+    """Declare CLI options for instrument selection and persistence."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("instrument", help="Instrument to request (e.g. USD_SGD)")
     parser.add_argument(
@@ -37,6 +43,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 
 def main(argv: Iterable[str] | None = None) -> None:
+    """Execute the REST call and fan the payload out to stdout or a file."""
     args = parse_args(argv or sys.argv[1:])
     payload = fetch_candles(
         instrument=args.instrument,

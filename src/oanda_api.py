@@ -1,4 +1,10 @@
-"""Client helpers for interacting with the OANDA v20 REST API."""
+"""Utility functions for talking to the OANDA v20 REST API.
+
+This module centralises API session initialisation and wraps the handful of
+endpoints the project needs. Keeping all network calls here gives the other
+modules a clean, dependency-free surface area and makes it easier to extend or
+mock during tests.
+"""
 
 import os
 from typing import Dict, Generator, Iterable, Tuple
@@ -8,6 +14,9 @@ import oandapyV20
 from oandapyV20.endpoints.pricing import PricingStream
 from oandapyV20.endpoints.instruments import InstrumentsCandles, InstrumentsOrderBook
 
+# Populate process environment from a local ``.env`` file so that the SDK can
+# locate the access token, account identifier, and environment (practice/live)
+# without hard-coding secrets in the source tree.
 load_dotenv()
 
 API = oandapyV20.API(
@@ -17,7 +26,22 @@ API = oandapyV20.API(
 
 
 def stream_prices(account_id: str, instruments: Iterable[str]) -> Generator[Tuple[str, Dict[str, object]], None, None]:
-    """Yield streaming price messages for the requested instruments."""
+    """Subscribe to the pricing stream and yield messages as they arrive.
+
+    Parameters
+    ----------
+    account_id:
+        OANDA account identifier. The stream is account-scoped so we need it on
+        every request.
+    instruments:
+        Iterable of instrument symbols (``EUR_USD``, ``USD_SGD``, …) to stream.
+
+    Yields
+    ------
+    tuple[str, dict]
+        Message type (``"price"`` or ``"heartbeat"``) and the raw JSON payload
+        returned by the SDK.
+    """
 
     params = {"instruments": ",".join(instruments)}
     request = PricingStream(accountID=account_id, params=params)
@@ -34,7 +58,11 @@ def fetch_candles(
     count: int = 500,
     price: str = "MBA",
 ) -> dict:
-    """Fetch historical candles for a given instrument."""
+    """Return historical OHLCV candles for the requested instrument.
+
+    The SDK handles pagination and request signing, so this helper simply
+    prepares the correct parameter dictionary and forwards the response body.
+    """
 
     params = {"granularity": granularity, "count": count, "price": price}
     request = InstrumentsCandles(instrument=instrument, params=params)
@@ -42,7 +70,7 @@ def fetch_candles(
 
 
 def fetch_orderbook(instrument: str) -> dict:
-    """Fetch the current order book snapshot for an instrument."""
+    """Retrieve the top-of-book snapshot for supported instruments."""
 
     request = InstrumentsOrderBook(instrument=instrument)
     return API.request(request)

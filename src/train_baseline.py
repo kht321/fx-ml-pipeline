@@ -1,4 +1,9 @@
-"""Train a logistic-regression baseline on Gold-layer features."""
+"""Train a logistic-regression baseline on Gold-layer features.
+
+The goal is to provide a lightweight modelling baseline that can be rerun after
+each Gold refresh. It handles categorical encoding, scaling, splitting, model
+training, evaluation, and model persistence in a single command.
+"""
 
 import argparse
 import json
@@ -15,6 +20,7 @@ from joblib import dump
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
+    """Expose CLI controls for dataset selection and training behaviour."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "training_path",
@@ -49,6 +55,7 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
 
 
 def prepare_features(df: pd.DataFrame, target_col: str) -> tuple[pd.DataFrame, pd.Series, List[str]]:
+    """Split the Gold dataset into model-ready ``X``/``y`` and feature names."""
     if target_col not in df.columns:
         raise KeyError(f"Target column '{target_col}' not found in dataset")
 
@@ -76,6 +83,7 @@ def prepare_features(df: pd.DataFrame, target_col: str) -> tuple[pd.DataFrame, p
 
 
 def main(argv: Iterable[str] | None = None) -> None:
+    """Coordinate the end-to-end training workflow and print diagnostics."""
     args = parse_args(argv)
 
     if not args.training_path.exists():
@@ -94,6 +102,8 @@ def main(argv: Iterable[str] | None = None) -> None:
         random_state=42,
     )
 
+    # ``with_mean=False`` keeps scipy's sparse matrices efficient when we add
+    # one-hot encoded categorical features to the design matrix.
     scaler = StandardScaler(with_mean=False)
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)

@@ -1,4 +1,10 @@
-"""Convert curated news drops into Silver-level textual features."""
+"""Convert curated news drops into Silver-level textual features.
+
+The news feed is curated offline and dropped into a directory. This module
+pulls each file, extracts lightweight sentiment/signal metrics, and appends the
+results to the Silver news dataset so trading models can join headlines against
+market data.
+"""
 
 import argparse
 import json
@@ -10,6 +16,9 @@ from typing import Dict, Iterable, List, Set
 
 import pandas as pd
 
+# Simple lexicons provide a quick proxy for bullish/bearish tone while keeping
+# the implementation dependency-free. Swap them for an LLM or richer model when
+# ready.
 POSITIVE_LEXICON = {
     "growth",
     "gain",
@@ -45,6 +54,7 @@ SGD_KEY_TERMS = {"singapore", "mas", "lion city", "sgd"}
 
 
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
+    """Define command-line switches for directory watching behaviour."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--input-dir",
@@ -79,6 +89,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
 
 
 def load_manifest(path: Path) -> Set[str]:
+    """Return the set of files previously ingested to avoid duplication."""
     if not path.exists():
         return set()
     try:
@@ -88,11 +99,13 @@ def load_manifest(path: Path) -> Set[str]:
 
 
 def save_manifest(path: Path, processed: Set[str]) -> None:
+    """Persist the manifest so resumptions honour already processed items."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(sorted(processed), indent=2))
 
 
 def read_news(file_path: Path) -> Dict[str, str]:
+    """Normalise text/JSON inputs into a consistent dictionary schema."""
     if file_path.suffix.lower() == ".json":
         data = json.loads(file_path.read_text(encoding="utf-8"))
         text = data.get("body") or data.get("text") or ""
@@ -121,6 +134,7 @@ def read_news(file_path: Path) -> Dict[str, str]:
 
 
 def extract_features(news: Dict[str, str]) -> Dict[str, object]:
+    """Derive sentiment, entity, and token-count features from a story."""
     tokens = re.findall(r"[a-zA-Z']+", news["text"].lower())
     token_count = len(tokens)
     unique_tokens = len(set(tokens))
@@ -153,6 +167,7 @@ def extract_features(news: Dict[str, str]) -> Dict[str, object]:
 
 
 def process_once(args: argparse.Namespace, processed: Set[str]) -> bool:
+    """Ingest any new files and append their features to the Silver dataset."""
     files = sorted(
         [
             path
@@ -189,6 +204,7 @@ def process_once(args: argparse.Namespace, processed: Set[str]) -> bool:
 
 
 def main(argv: Iterable[str] | None = None) -> None:
+    """Run one-shot ingestion or keep polling depending on ``--follow``."""
     args = parse_args(argv or sys.argv[1:])
     args.input_dir.mkdir(parents=True, exist_ok=True)
 
