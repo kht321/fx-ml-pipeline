@@ -71,20 +71,15 @@ oanda-fx-ml/
 ```mermaid
 flowchart TD
     subgraph Bronze
-        BPrice[Price stream
-(usd_sgd_stream.ndjson)]
-        BNews[News drop folder
-(data/bronze/news/)]
+        BPrice[Price stream <br/> data/bronze/prices/usd_sgd_stream.ndjson]
+        BNews[News drop folder <br/> data/bronze/news/]
     end
     subgraph Silver
-        SPrice[Silver price features
-(sgd_vs_majors.csv)]
-        SNews[Silver news features
-(news_features.csv)]
+        SPrice[Silver price features <br/> data/silver/prices/sgd_vs_majors.csv]
+        SNews[Silver news features <br/> data/silver/news/news_features.csv]
     end
     subgraph Gold
-        GoldSet[Gold training set
-(sgd_vs_majors_training.csv)]
+        GoldSet[Gold training set <br/> data/gold/training/sgd_vs_majors_training.csv]
     end
     BPrice -->|build_features.py| SPrice
     BNews -->|process_news.py| SNews
