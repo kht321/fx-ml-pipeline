@@ -38,6 +38,35 @@ oanda-fx-ml/
 ## Getting Started
 
 ## Pipeline Overview
+## Pipeline Walkthrough
+
+1. **Capture (Bronze)** – `stream_prices.py` archives tick-level quotes while historical utilities (`fetch_candles.py`, `fetch_orderbook.py`) backfill market context. Curated or simulated headlines land in `data/bronze/news/`.
+2. **Feature Engineering (Silver)** – `build_features.py` aggregates ticks into rolling statistics per instrument, and `process_news.py` transforms raw text into sentiment/topic signals. Both scripts append new rows incrementally so the layer can refresh while the stream is running.
+3. **Contextual Join (Gold)** – `build_training_set.py` performs an as-of merge that fuses the latest Silver price slice with the most recent news affecting each pair, producing a model-ready table.
+4. **Model & Evaluation** – `train_baseline.py` standardises features, fits logistic regression, and emits both a JSON metrics summary and a persisted `(model, scaler, feature list)` bundle for downstream APIs/UI.
+5. **Replay & Simulation** – `simulate_news_feed.py` drips stories into the Bronze folder on a timer, re-running Silver ingestion and (optionally) Gold/model refresh so you can observe real-time impact without waiting for live headlines.
+
+### Script ↔ Artifact Map
+
+| Script | Input artefacts | Output artefacts | Layer |
+| --- | --- | --- | --- |
+| `stream_prices.py` | OANDA pricing stream | `data/bronze/prices/usd_sgd_stream.ndjson` | Bronze |
+| `fetch_candles.py` | OANDA candles endpoint | `data/bronze/prices/*_m1.json` | Bronze |
+| `fetch_orderbook.py` | OANDA order-book endpoint | `data/bronze/orderbook/*.json` | Bronze |
+| `process_news.py` | `data/bronze/news/` files | `data/silver/news/news_features.csv` | Silver |
+| `build_features.py` | Bronze tick NDJSON | `data/silver/prices/sgd_vs_majors.csv` | Silver |
+| `build_training_set.py` | Silver price + news | `data/gold/training/sgd_vs_majors_training.csv` | Gold |
+| `train_baseline.py` | Gold training set | JSON metrics + `data/gold/models/*.pkl` | Gold |
+| `simulate_news_feed.py` | `data/bronze/news_corpus/` + existing layers | Replays Bronze news + optional refreshed Silver/Gold/Model | Cross-layer |
+
+### Feature Families
+
+- **Market microstructure** – spreads, level-one liquidity, intraday ranges capture immediate supply/demand.
+- **Momentum & trend** – `ret_1`, `ret_5`, moving averages, EWMA, and momentum indicators flag directionality across short horizons.
+- **Volatility & risk** – rolling standard deviation (`roll_vol_20`) and volatility flags in text highlight turbulent conditions.
+- **Sentiment & narrative** – sentiment score, subjectivity, volatility keywords, and macro-related scores summarise tone; named entities surface who/what is driving the story.
+- **Temporal alignment** – publish hour and time-to-close features allow the model to react differently to pre-market vs. post-close headlines.
+
 
 ```mermaid
 flowchart TD
@@ -229,6 +258,10 @@ flowchart TD
 
 ## Glossary
 
+- **Medallion architecture**: A layered design pattern (Bronze → Silver → Gold) for progressively refining data from raw ingestion to analytics-ready tables.
+- **EWMA**: Exponentially Weighted Moving Average; emphasises recent observations when smoothing data.
+- **RSI / MACD**: Popular momentum indicators used to gauge overbought/oversold conditions and trend strength.
+- **Probability of direction**: The logistic regression output signalling how likely the model thinks the price will rise (1) versus fall (0).
 - **Bronze / Silver / Gold layers**: Names for the raw (Bronze), cleaned feature (Silver), and model-ready (Gold) tables in the data engineering pipeline.
 - **Candle**: A summary of price movement over a time window (open, high, low, close).
 - **Order book**: Snapshot of pending buy/sell orders showing available volume at each price level.
