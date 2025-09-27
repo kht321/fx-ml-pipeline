@@ -28,10 +28,15 @@ def stream_prices(account_id: str, instruments: Iterable[str]) -> Generator[Tupl
         yield msg_type, message
 
 
-def fetch_candles(instrument: str, granularity: str = "M1", count: int = 500) -> dict:
+def fetch_candles(
+    instrument: str,
+    granularity: str = "M1",
+    count: int = 500,
+    price: str = "MBA",
+) -> dict:
     """Fetch historical candles for a given instrument."""
 
-    params = {"granularity": granularity, "count": count, "price": "MBA"}
+    params = {"granularity": granularity, "count": count, "price": price}
     request = InstrumentsCandles(instrument=instrument, params=params)
     return API.request(request)
 

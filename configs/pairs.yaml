@@ -1,3 +1,20 @@
-default: ["EUR_USD", "GBP_USD"]
-scalping: ["EUR_USD", "GBP_USD", "USD_JPY"]
-macro: ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "USD_CHF"]
+default:
+  - USD_SGD
+  - EUR_USD
+  - GBP_USD
+sgd_focus:
+  description: "Singapore dollar cross rates to monitor"
+  instruments:
+    - USD_SGD
+    - EUR_SGD
+    - SGD_JPY
+liquidity_majors:
+  - EUR_USD
+  - GBP_USD
+  - USD_JPY
+macro_basket:
+  - USD_SGD
+  - EUR_USD
+  - GBP_USD
+  - USD_JPY
+  - AUD_USD
