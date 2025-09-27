@@ -13,7 +13,7 @@ oanda-fx-ml/
 ├── data/
 │   ├── bronze/
 │   │   ├── news/          # Live drop folder watched by process_news.py
-│   │   ├── news_corpus/    # Synthetic corpus replayed by simulate_news_feed.py
+│   │   ├── news_corpus/   # Synthetic corpus replayed by simulate_news_feed.py
 │   │   ├── orderbook/
 │   │   └── prices/
 │   ├── silver/
@@ -167,11 +167,84 @@ flowchart TD
 
 ## Feature Reference
 
+## Layer Schema Examples
+
+### Bronze Layer
+
+**Text Table**
+
+| Column | Example | Notes |
+| --- | --- | --- |
+| url | https://reuters.com/xyz | Source of article |
+| title | "Fed hikes interest rate" | Scraped title |
+| publish_date | 9/23/2025 14:22 | Use original time if available |
+
+**Stock Price Table**
+
+| Column | Example | Notes |
+| --- | --- | --- |
+| Open | 4410.1 | From yfinance |
+| High | 4420.5 |  |
+| Low | 4400.3 |  |
+| Close | 4412.3 |  |
+| Volume | 2.3B |  |
+| Date (index) | 9/23/2025 | Aligned with news date |
+
+### Silver Layer
+
+- Scrape the URL to extract full article text (`text`) and generate an NLP summary (`summary`).
+- Clean Bronze inputs by handling missing values, imputing gaps, enforcing types, and dropping placeholder values before promotion to Silver.
+
+### Gold Layer
+
+**Text-driven Features**
+
+| Category | Feature | Type | Description |
+| --- | --- | --- | --- |
+| Sentiment & Tone | sentiment_score | Float (-1 to 1) | Overall tone (negative/neutral/positive) |
+| Sentiment & Tone | subjectivity | Float (0–1) | Objective vs opinionated tone |
+| Sentiment & Tone | volatility_flag | Bool | Mentions words like "crash", "plunge", "surge" |
+| Topic Signals | named_entities | str | Entities mentioned (e.g., "Powell", "Apple") |
+| Topic Signals | is_macro_related | Float (0–10) | Intensity of macroeconomic terminology |
+| Temporal Context | publish_hour | Int (0–23) | Hour the news was published |
+| Temporal Context | time_to_close | Float (hrs) | Hours between publish time and market close |
+
+**Price-derived Features**
+
+| Feature | Type | Description |
+| --- | --- | --- |
+| Close(t-1) | Float | Previous close price |
+| Volume(t-1) | Float | Previous volume |
+| High(t-1) - Low(t-1) | Float | Intraday range |
+| Close(t-1) - Open(t-1) | Float | Intraday momentum |
+| Moving averages | Float | Rolling window means (configurable horizon) |
+| EWMA | Float | Exponentially weighted moving average |
+| Momentum indicators | Float | Additional technical factors (e.g., RSI, MACD) |
+
 - **Bronze layer artefacts**
   - `data/bronze/prices/usd_sgd_stream.ndjson` logs every tick with the full bid/ask ladder, closeout quotes, tradeable flags, and instrument metadata. Candle dumps such as `usdsgd_m1.json`/`eurusd_m1.json` follow the `InstrumentsCandles` schema (`candles[].mid/bid/ask`, `volume`, `time`, `complete`), while order-book captures (e.g. `eurusd_orderbook.json`) preserve depth snapshots. The curated corpus in `data/bronze/news_corpus/` (five synthetic SGD-relevant stories) seeds the sentiment pipeline and can be replayed into `data/bronze/news/` via `simulate_news_feed.py`.
 - **Silver price features** (`data/silver/prices/sgd_vs_majors.csv`) contain `time`, `instrument`, `mid`, `spread`, `ret_1`, `ret_5`, `roll_vol_20`, `zscore_20`, `bid_liquidity`, `ask_liquidity`, and the binary label `y`. Rows are flushed incrementally as the streaming buffer reaches the configured window length.
 - **Silver news features** (`data/silver/news/news_features.csv`) record `story_id`, `headline`, `published_at`, `source`, lexical counts (`word_count`, `unique_word_count`, `positive_hits`, `negative_hits`), the normalised `sentiment_score`, SGD-specific flags (`mentions_sgd`, `mas_mentions`), and `currency_mentions`.
 - **Gold training table** (`data/gold/training/sgd_vs_majors_training.csv`) preserves all Silver price fields and appends contextual columns: `news_sentiment_score`, `news_mentions_sgd`, `news_word_count`, `news_age_minutes`, `news_story_id`, `news_headline`, `news_source`, and the aligned `published_at`. When no qualifying headline is found, neutral defaults (0 sentiment / counts, NULL identifiers) are injected so the design matrix remains dense.
+
+## Glossary
+
+- **Bronze / Silver / Gold layers**: Names for the raw (Bronze), cleaned feature (Silver), and model-ready (Gold) tables in the data engineering pipeline.
+- **Candle**: A summary of price movement over a time window (open, high, low, close).
+- **Order book**: Snapshot of pending buy/sell orders showing available volume at each price level.
+- **Sentiment score**: Simple numeric gauge of how positive or negative a news story sounds.
+- **Tick**: One update from the live price stream (bid/ask quotes plus metadata).
+- **USD/SGD, EUR/USD, GBP/USD**: Currency pairs; the value of one unit of the first currency expressed in the second.
+- **Logistic regression**: A statistical model that outputs the probability of a binary outcome (e.g., price up vs. down).
+- **As-of join**: A merge that pairs each row with the most recent matching observation before it in time.
+- **Heartbeat**: Keep-alive message from the streaming API indicating the connection is still active even if no prices changed.
+
+## Operational Notes
+
+- OANDA streams are 24×5: markets close Friday 5 pm New York time and reopen Sunday 5 pm New York (≈21:00–22:00 UTC depending on DST). During closure the API returns the last snapshot with `tradeable=false`; the streamer will stay connected but no new ticks arrive.
+- Use `--max-ticks` on `stream_prices.py` if you want an automatic stop after N price messages; otherwise leave it running and watch the `--log-every` output for progress once markets reopen.
+- If the Silver price file is empty, make sure the stream has produced at least `--min-rows` ticks before running `build_features.py`; the script logs how many rows were written each flush.
+- For offline experiments or market downtime, bootstrap your datasets with `fetch_candles.py` and `fetch_orderbook.py` to generate Bronze artefacts before moving to Silver/Gold.
 
 ## Data Cleaning & Feature Engineering Flow
 
