@@ -1,0 +1,139 @@
+news_features:
+  sentiment:
+    sentiment_score:
+      description: "Primary sentiment score (-1 to 1, FinGPT or lexicon-based)"
+    confidence:
+      description: "Model confidence in sentiment prediction (0-1)"
+    sentiment_score_lexicon:
+      description: "Lexicon-based sentiment fallback"
+    sentiment_score_fingpt:
+      description: "FinGPT-enhanced sentiment analysis"
+    confidence_fingpt:
+      description: "FinGPT confidence score"
+    positive_hits:
+      description: "Count of positive financial terms"
+    negative_hits:
+      description: "Count of negative financial terms"
+    volatility_hits:
+      description: "Count of volatility-related terms"
+
+  market_aware:
+    market_coherence:
+      description: "News-market coherence (aligned/divergent/neutral)"
+    signal_strength_adjusted:
+      description: "Sentiment strength adjusted for market context (0-1)"
+    market_mid_price:
+      description: "USD/SGD mid price at time of analysis"
+    market_volatility:
+      description: "Market volatility regime at analysis time"
+    market_session:
+      description: "Trading session when news was analyzed"
+    market_vol_regime:
+      description: "Boolean flag for high volatility regime"
+
+  policy:
+    policy_tone:
+      description: "Overall policy sentiment (hawkish/dovish/neutral)"
+    policy_implications:
+      description: "FinGPT-derived policy implications"
+    hawkish_hits:
+      description: "Count of hawkish policy terms"
+    dovish_hits:
+      description: "Count of dovish policy terms"
+
+  sgd_specific:
+    sgd_directional_signal:
+      description: "FinGPT SGD-specific directional signal (-1 to 1)"
+    mentions_sgd:
+      description: "Binary flag if story references SGD or Singapore"
+    currency_mentions:
+      description: "Comma-separated list of mentioned currencies"
+
+  temporal:
+    time_horizon:
+      description: "FinGPT-predicted impact timeframe"
+    news_age_minutes:
+      description: "Minutes between story publication and market observation"
+
+  metadata:
+    word_count:
+      description: "Total word count of article"
+    unique_word_count:
+      description: "Unique word count of article"
+    source:
+      description: "News source identifier"
+    key_factors:
+      description: "FinGPT-extracted key market drivers"
+
+gold_signals:
+  aggregated:
+    avg_sentiment:
+      description: "Weighted average sentiment over lookback window"
+    avg_directional:
+      description: "Weighted average directional signal"
+    signal_strength:
+      description: "Absolute magnitude of signal"
+    signal_direction:
+      description: "Sign of aggregated signal (-1/0/1)"
+    trading_signal:
+      description: "Final trading signal incorporating quality filters"
+
+  consensus:
+    article_count:
+      description: "Number of articles in aggregation window"
+    high_confidence_count:
+      description: "Number of high-confidence articles"
+    high_impact_count:
+      description: "Number of high-impact stories"
+    signal_consensus:
+      description: "Proportion of articles agreeing on direction"
+    policy_consensus:
+      description: "Proportion agreeing on dominant policy tone"
+
+  quality:
+    quality_score:
+      description: "Overall signal quality combining multiple factors"
+    relevance_score:
+      description: "Currency-specific relevance weighting"
+    time_decay:
+      description: "Time-based decay factor for signal freshness"
+    decayed_signal:
+      description: "Trading signal adjusted for time decay"
+
+  recent:
+    recent_sentiment:
+      description: "Sentiment from last 6 hours only"
+    recent_article_count:
+      description: "Recent article count"
+    minutes_since_latest:
+      description: "Minutes since most recent article"
+
+processing_params:
+  fingpt:
+    model_name: "FinGPT/fingpt-sentiment_llama2-7b_lora"
+    use_8bit: true
+    batch_size: 10
+    min_confidence: 0.3
+
+  market_context:
+    enabled: true
+    market_features_path: "data/market/silver/technical_features/sgd_vs_majors.csv"
+    target_instrument: "USD_SGD"
+    key_features: ["mid", "ret_5", "vol_20", "high_vol_regime", "spread_pct", "zscore_20"]
+
+  aggregation:
+    lookback_hours: 24
+    window_frequency: "1H"
+    focus_currencies: ["SGD", "USD", "EUR", "GBP"]
+
+  lexicon:
+    positive_terms: ["growth", "gain", "improve", "strong", "bullish", "increase", "optimistic", "upgrade", "boost", "surge", "rally", "outperform"]
+    negative_terms: ["fall", "risk", "slowdown", "bearish", "decline", "downgrade", "weak", "loss", "crash", "plunge", "drop", "underperform"]
+    volatility_terms: ["volatile", "volatility", "turbulent", "unstable", "erratic", "swing", "whipsaw", "choppy"]
+    sgd_keywords: ["sgd", "singapore dollar", "monetary authority", "mas", "singapore", "sing dollar"]
+    currency_codes: ["usd", "sgd", "eur", "gbp", "jpy", "aud", "chf", "cny", "cad", "nzd"]
+
+quality_filters:
+  min_confidence: 0.3
+  min_relevance: 0.5
+  max_age_hours: 48

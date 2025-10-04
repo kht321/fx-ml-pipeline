@@ -15,7 +15,16 @@ dependencies = [
   "requests",
   "pandas",
   "numpy",
-  "scikit-learn"
+  "scikit-learn",
+  "xgboost",
+  "transformers",
+  "torch",
+  "pyyaml",
+  "joblib",
+  "aiohttp",
+  "feedparser",
+  "beautifulsoup4",
+  "lxml"
 ]
 
 [project.urls]

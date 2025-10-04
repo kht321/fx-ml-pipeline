@@ -1,0 +1,645 @@
+Metadata-Version: 2.4
+Name: oanda-fx-ml
+Version: 0.1.0
+Summary: FX price streaming and feature pipeline on OANDA v20
+Author-email: Your Name <you@example.com>
+Project-URL: Homepage, https://developer.oanda.com/
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: python-dotenv
+Requires-Dist: oandapyV20
+Requires-Dist: requests
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: scikit-learn
+Requires-Dist: xgboost
+Requires-Dist: transformers
+Requires-Dist: torch
+Requires-Dist: pyyaml
+Requires-Dist: joblib
+Requires-Dist: aiohttp
+Requires-Dist: feedparser
+Requires-Dist: beautifulsoup4
+Requires-Dist: lxml
+Dynamic: license-file
+
+# OANDA SGD FX ML Pipeline
+
+This project implements a **dual medallion architecture** for modeling Singapore dollar FX moves with data from OANDA v20. The system separates Market Data and News processing into independent pipelines, each following Bronze → Silver → Gold progression, with FinGPT-enhanced sentiment analysis and a final Combined layer for multi-modal modeling.
+
+## 🚀 2025 Live Data Collection
+
+**NEW**: This pipeline now includes live data collection for real-time training throughout 2025:
+
+- **Hourly USD_SGD candles** from OANDA v20 API (streaming)
+- **SGD-relevant financial news** from multiple sources (Reuters, Bloomberg, CNA, ST)
+- **Market-aware FinGPT analysis** combining real-time market context with news sentiment
+
+### Quick Start 2025 Collection
+```bash
+# Install dependencies
+pip install -e .
+
+# Start live collection (market + news)
+python scripts/start_2025_collection.py
+
+# Check status
+python scripts/start_2025_collection.py --status
+
+# Test news collection only
+python scripts/start_2025_collection.py --test-news
+```
+
+## 🏗️ Architecture Overview
+
+### **Enhanced Dual Medallion Design**
+
+```mermaid
+flowchart TD
+    subgraph Market["🏦 Market Data Pipeline"]
+        MB[Bronze: Raw Ticks] → MS[Silver: Technical Features] → MG[Gold: Market Training Data]
+    end
+
+    subgraph News["📰 Market-Aware News Pipeline"]
+        NB[Bronze: Raw Articles] → NS[Silver: FinGPT + Market Context] → NG[Gold: Trading Signals]
+    end
+
+    subgraph Combined["🤖 Combined Modeling"]
+        MG -.-> CM[Combined Models]
+        NG -.-> CM
+        CM → Predictions[API/UI Predictions]
+    end
+
+    MS -.-> NS
+    style MG fill:#e1f5fe
+    style NG fill:#fff3e0
+    style CM fill:#f3e5f5
+    style MS fill:#e8f5e8
+```
+
+**Key Enhancement**: Market Silver layer feeds real-time context to FinGPT for market-aware sentiment analysis.
+**Important**: The two Gold layers remain **separate** - they are merged only during combined model training, not stored as a unified dataset.
+
+## 📁 Project Structure
+
+```
+fx-ml-pipeline/
+├── .env.example
+├── configs/
+│   ├── market_features.yaml      # Market feature definitions
+│   ├── news_features.yaml        # News/FinGPT feature definitions
+│   ├── combined_features.yaml    # Combined modeling config
+│   └── pairs.yaml               # Currency pair configurations
+├── data/
+│   ├── market/                   # 🏦 Market Data Medallion
+│   │   ├── bronze/
+│   │   │   ├── prices/          # Raw price ticks from OANDA stream
+│   │   │   ├── orderbook/       # Order book snapshots
+│   │   │   └── instruments/     # Instrument metadata
+│   │   ├── silver/
+│   │   │   ├── technical_features/  # OHLCV + technical indicators
+│   │   │   ├── microstructure/     # Spreads, liquidity metrics
+│   │   │   └── volatility/         # Risk and volatility features
+│   │   └── gold/
+│   │       ├── training/        # Market-ready training data
+│   │       └── models/          # Market-only models
+│   ├── news/                     # 📰 News Data Medallion
+│   │   ├── bronze/
+│   │   │   ├── raw_articles/    # Original news articles (text/JSON)
+│   │   │   ├── feeds/          # Different news sources
+│   │   │   └── metadata/       # Publication metadata
+│   │   ├── silver/
+│   │   │   ├── sentiment_scores/  # FinGPT sentiment analysis
+│   │   │   ├── entity_mentions/   # Named entity features
+│   │   │   └── topic_signals/     # Topic classification
+│   │   └── gold/
+│   │       ├── news_signals/    # Aggregated trading signals
+│   │       └── models/          # News-only models
+│   └── combined/                 # 🤖 Multi-modal Integration
+│       ├── training/            # Temporarily merged datasets
+│       ├── models/              # Combined market+news models
+│       └── predictions/         # Model outputs
+├── src/
+│   ├── Market Pipeline
+│   │   ├── build_market_features.py   # Bronze → Silver (technical analysis)
+│   │   └── build_market_gold.py       # Silver → Gold (market training data)
+│   ├── News Pipeline
+│   │   ├── fingpt_processor.py        # FinGPT integration module
+│   │   ├── build_news_features.py     # Bronze → Silver (FinGPT sentiment)
+│   │   └── build_news_gold.py         # Silver → Gold (trading signals)
+│   ├── Combined Modeling
+│   │   └── train_combined_model.py    # Merge Gold layers for training
+│   ├── Data Ingestion (Shared)
+│   │   ├── stream_prices.py           # Live price streaming
+│   │   ├── fetch_candles.py           # Historical candles
+│   │   ├── fetch_orderbook.py         # Order book snapshots
+│   │   └── oanda_api.py               # OANDA API wrapper
+│   ├── Orchestration
+│   │   └── orchestrate_pipelines.py   # Coordinate both pipelines
+│   ├── Utilities
+│   │   └── simulate_news_feed.py      # News simulation for testing
+│   └── __init__.py
+└── tests/
+    └── __init__.py
+```
+
+## 🚀 Getting Started
+
+### **1. Installation**
+
+```bash
+# Clone and setup environment
+python -m venv .venv
+source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
+pip install -e .
+
+# Configure OANDA credentials
+cp .env.example .env
+# Edit .env with your OANDA_TOKEN, OANDA_ACCOUNT_ID, and OANDA_ENV
+```
+
+### **2. Quick Start - Full Pipeline**
+
+```bash
+# Run complete dual medallion pipeline
+python src/orchestrate_pipelines.py \
+    --mode all \
+    --bronze-to-silver \
+    --silver-to-gold \
+    --train-models
+```
+
+## 🏦 Market Data Pipeline
+
+### **Bronze Layer: Data Ingestion**
+
+```bash
+# Stream live prices
+python src/stream_prices.py USD_SGD EUR_USD GBP_USD \
+    --bronze-path data/market/bronze/prices/usd_sgd_stream.ndjson \
+    --max-ticks 500 --log-every 50
+
+# Fetch historical data
+python src/fetch_candles.py USD_SGD --granularity M1 --count 2000 \
+    --output data/market/bronze/prices/usdsgd_m1.json
+
+python src/fetch_orderbook.py EUR_USD \
+    --output data/market/bronze/orderbook/eurusd_orderbook.json
+```
+
+### **Silver Layer: Technical Feature Engineering**
+
+```bash
+python src/build_market_features.py \
+    --input data/market/bronze/prices/usd_sgd_stream.ndjson \
+    --output-technical data/market/silver/technical_features/sgd_vs_majors.csv \
+    --output-microstructure data/market/silver/microstructure/depth_features.csv \
+    --output-volatility data/market/silver/volatility/risk_metrics.csv \
+    --flush-interval 100
+```
+
+**Generated Features:**
+- **Technical**: `ret_1`, `ret_5`, `roll_vol_20`, `zscore_20`, `ewma_signal`
+- **Microstructure**: `spread`, `bid_liquidity`, `ask_liquidity`, `effective_spread`
+- **Volatility**: `vol_5`, `vol_20`, `high_vol_regime`, `range_vol`
+
+### **Gold Layer: Market Training Data**
+
+```bash
+python src/build_market_gold.py \
+    --technical-features data/market/silver/technical_features/sgd_vs_majors.csv \
+    --microstructure-features data/market/silver/microstructure/depth_features.csv \
+    --volatility-features data/market/silver/volatility/risk_metrics.csv \
+    --output data/market/gold/training/market_features.csv \
+    --feature-selection all
+```
+
+## 📰 News Pipeline with FinGPT
+
+### **Bronze Layer: News Collection**
+
+```bash
+# Place news articles in data/news/bronze/raw_articles/
+# Supports both .txt and .json formats
+```
+
+### **Silver Layer: Market-Aware FinGPT Analysis**
+
+```bash
+python src/build_news_features.py \
+    --input-dir data/news/bronze/raw_articles \
+    --use-fingpt \
+    --fingpt-model "FinGPT/fingpt-sentiment_llama2-7b_lora" \
+    --use-market-context \
+    --market-features-path data/market/silver/technical_features/sgd_vs_majors.csv \
+    --output-sentiment data/news/silver/sentiment_scores/sentiment_features.csv \
+    --output-entities data/news/silver/entity_mentions/entity_features.csv \
+    --output-topics data/news/silver/topic_signals/topic_features.csv \
+    --batch-size 10
+```
+
+**Enhanced FinGPT Features:**
+- **sentiment_score_fingpt**: Financial domain sentiment (-1 to 1)
+- **sgd_directional_signal**: SGD-specific trading signal
+- **policy_implications**: Hawkish/dovish policy tone
+- **confidence_fingpt**: Model confidence (0-1)
+- **time_horizon**: Expected impact timeframe
+- **market_coherence**: News-market alignment (aligned/divergent/neutral)
+- **signal_strength_adjusted**: Context-adjusted signal strength
+- **market_mid_price**: USD/SGD rate during analysis
+- **market_session**: Trading session context (Asian/London/NY)
+
+### **Gold Layer: Trading Signals**
+
+```bash
+python src/build_news_gold.py \
+    --sentiment-features data/news/silver/sentiment_scores/sentiment_features.csv \
+    --entity-features data/news/silver/entity_mentions/entity_features.csv \
+    --topic-features data/news/silver/topic_signals/topic_features.csv \
+    --output data/news/gold/news_signals/trading_signals.csv \
+    --lookback-hours 24 \
+    --focus-currencies sgd usd eur gbp
+```
+
+**Trading Signal Features:**
+- **avg_sentiment**: Time-weighted sentiment aggregation
+- **signal_strength**: Absolute signal magnitude
+- **trading_signal**: Final directional signal
+- **quality_score**: Signal reliability metric
+- **time_decay**: Freshness weighting
+
+## 🤖 Combined Modeling
+
+**Key Point**: The Gold layers remain **separate**. They are only merged temporarily during model training.
+
+```bash
+python src/train_combined_model.py \
+    --market-features data/market/gold/training/market_features.csv \
+    --news-signals data/news/gold/news_signals/trading_signals.csv \
+    --output-dir data/combined/models \
+    --models logistic random_forest xgboost \
+    --focus-currency USD_SGD \
+    --news-tolerance 6H \
+    --lag-features 1,2,3,5,10 \
+    --cross-validation
+```
+
+**Model Types:**
+- **Logistic Regression**: Fast, interpretable baseline
+- **Random Forest**: Captures non-linear feature interactions
+- **XGBoost**: Advanced gradient boosting with explicit lag features
+
+**Three Modeling Approaches:**
+1. **Market-only**: Uses only `data/market/gold/training/market_features.csv`
+2. **News-only**: Uses only `data/news/gold/news_signals/trading_signals.csv`
+3. **Combined**: Temporal merge of both Gold layers using as-of join
+
+### **Lag Feature Engineering**
+
+XGBoost requires explicit lag features to capture time-series patterns:
+
+```python
+# Market features with lags
+features = [
+    'ret_1', 'ret_1_lag1', 'ret_1_lag2', 'ret_1_lag3',    # Returns
+    'vol_20', 'vol_20_lag1', 'vol_20_lag2',              # Volatility
+    'spread_pct', 'spread_pct_lag1',                      # Spreads
+    'news_sentiment', 'news_sentiment_lag1'              # News signals
+]
+
+# Lag windows: [1, 2, 3, 5, 10] ticks
+lag_features = [1, 2, 3, 5, 10]  # Configurable via --lag-features
+```
+
+**Key Lag Categories:**
+- **Price/Return Lags**: Momentum and mean reversion patterns
+- **Volatility Lags**: Risk regime persistence
+- **News Sentiment Lags**: Information propagation delays
+- **Cross-Feature Lags**: Market-news interaction patterns
+
+## 📊 Pipeline Walkthrough
+
+### **1. Data Capture (Bronze)**
+- **Market**: `stream_prices.py` captures live ticks → `data/market/bronze/prices/`
+- **News**: Curated articles → `data/news/bronze/raw_articles/`
+
+### **2. Feature Engineering (Silver)**
+- **Market**: `build_market_features.py` → Technical/microstructure/volatility features
+- **News**: `build_news_features.py` → FinGPT sentiment analysis
+
+### **3. Gold Layer Preparation**
+- **Market**: `build_market_gold.py` → Consolidated market training data
+- **News**: `build_news_gold.py` → Aggregated trading signals
+
+### **4. Combined Modeling with Lag Features**
+- **Training**: `train_combined_model.py` → Merge Gold layers via as-of join
+- **Lag Engineering**: Explicit creation of lagged features (t-1, t-2, t-3, t-5, t-10)
+- **XGBoost Focus**: Advanced gradient boosting optimized for time-series patterns
+- **Output**: Separate market, news, and combined models
+
+### **5. Orchestration**
+- **Coordinator**: `orchestrate_pipelines.py` → Manages entire workflow
+
+## ⚙️ Configuration
+
+### **Market Features** (`configs/market_features.yaml`)
+```yaml
+market_features:
+  technical:
+    ret_1:
+      window: 1
+      description: "One-tick percentage return"
+  microstructure:
+    effective_spread:
+      description: "Spread as percentage of mid-price"
+  volatility:
+    vol_20:
+      window: 20
+      description: "20-tick realized volatility"
+```
+
+### **News Features** (`configs/news_features.yaml`)
+```yaml
+news_features:
+  sentiment:
+    sentiment_score:
+      description: "FinGPT sentiment (-1 to 1)"
+    sgd_directional_signal:
+      description: "SGD-specific directional signal"
+
+processing_params:
+  fingpt:
+    model_name: "FinGPT/fingpt-sentiment_llama2-7b_lora"
+    use_8bit: true
+    min_confidence: 0.3
+```
+
+### **Combined Modeling** (`configs/combined_features.yaml`)
+```yaml
+combined_modeling:
+  target_currency: "USD_SGD"
+  merge_strategy:
+    news_tolerance: "6H"
+    market_primary: true
+    fill_missing_news: true
+
+  lag_engineering:
+    enabled: true
+    lag_periods: [1, 2, 3, 5, 10]
+    lag_features:
+      market: ["ret_1", "ret_5", "vol_20", "spread_pct", "zscore_20"]
+      news: ["sentiment_score", "sgd_directional_signal", "signal_strength_adjusted"]
+
+  models:
+    xgboost:
+      enabled: true
+      params:
+        max_depth: 6
+        learning_rate: 0.1
+        n_estimators: 100
+        subsample: 0.8
+        colsample_bytree: 0.8
+        random_state: 42
+      early_stopping_rounds: 10
+      eval_metric: "logloss"
+```
+
+## 🔄 Pipeline Orchestration
+
+### **Individual Pipelines**
+
+```bash
+# Market pipeline only
+python src/orchestrate_pipelines.py --mode market --bronze-to-silver --silver-to-gold
+
+# News pipeline only (with FinGPT)
+python src/orchestrate_pipelines.py --mode news --bronze-to-silver --silver-to-gold
+
+# Combined modeling with XGBoost and lag features
+python src/orchestrate_pipelines.py --mode combined --train-models
+```
+
+### **Continuous Operation**
+
+```bash
+# Run as daemon (checks every 5 minutes)
+python src/orchestrate_pipelines.py \
+    --mode all \
+    --continuous \
+    --interval 300 \
+    --bronze-to-silver \
+    --silver-to-gold \
+    --train-models
+```
+
+### **Health Monitoring**
+
+The orchestrator monitors:
+- ✅ Data freshness in each layer
+- ✅ Processing success rates
+- ✅ Model performance metrics
+- ✅ Pipeline component health
+
+## 📈 Expected Performance
+
+Based on the dual medallion architecture with XGBoost and lag features:
+
+| Model Type | Expected Accuracy | Latency | Use Case |
+|------------|------------------|---------|----------|
+| Market-only | 65-70% | <100ms | High-frequency trading |
+| News-only (FinGPT) | 60-65% | <2s | Event-driven strategies |
+| Combined XGBoost | 78-85% | <5s | Comprehensive analysis with time-series patterns |
+
+### **XGBoost Advantages for FX Prediction**
+
+- **Time-Series Patterns**: Explicit lag features capture momentum, mean reversion, and regime persistence
+- **Non-Linear Interactions**: Market-news interaction effects and volatility clustering
+- **Feature Importance**: Identifies which lags and features matter most for SGD prediction
+- **Regularization**: Built-in L1/L2 regularization prevents overfitting to market noise
+- **Early Stopping**: Automatic model selection based on validation performance
+
+## 🎯 Key Improvements Over Single Medallion
+
+### **1. Separation of Concerns**
+- Market pipeline: Optimized for high-frequency technical analysis
+- News pipeline: Optimized for event-driven sentiment analysis
+- Clear data lineage and responsibility boundaries
+
+### **2. Market-Aware FinGPT Enhancement**
+- **Domain Expertise**: Financial language understanding
+- **SGD-Specific**: Currency-specific directional signals
+- **Policy Analysis**: Monetary policy sentiment (hawkish/dovish)
+- **Market Context**: Real-time market conditions inform sentiment analysis
+- **Coherence Analysis**: Detects alignment/divergence between news and market state
+- **Confidence Scoring**: Reliability metrics adjusted for market context
+
+### **3. Independent Scaling**
+- Market data: Process every tick (continuous)
+- News data: Process when articles arrive (event-driven)
+- Combined models: Retrain on schedule (hourly/daily)
+
+### **4. Flexible Architecture**
+```python
+# Three distinct approaches:
+market_model = load_model("data/market/gold/models/market_only.pkl")
+news_model = load_model("data/news/gold/models/news_only.pkl")
+combined_model = load_model("data/combined/models/gradient_boosting_combined_model.pkl")
+```
+
+## 🧪 Testing Market-Aware Analysis
+
+### **Demo Script**
+```bash
+# Test market-contextualized FinGPT analysis
+python test_market_context.py
+```
+
+This demonstrates how the same news article produces different sentiment signals depending on current market conditions:
+
+- **High Volatility Context**: Stronger signals, enhanced risk awareness
+- **Low Volatility Context**: More nuanced analysis, stability considerations
+- **Session Context**: Different impact expectations (Asian vs London vs NY)
+
+### **Example Analysis Output**
+```
+Scenario           Sentiment  Confidence  SGD Signal   Coherence    Adj. Strength
+Baseline (No Context)  0.75      0.80        0.70       N/A           0.80
+High Vol Context       0.65      0.85        0.60       aligned       0.72
+Low Vol Context        0.80      0.75        0.75       divergent     0.65
+```
+
+## 🔧 Development Guide
+
+### **Adding Market Features**
+1. Modify `src/build_market_features.py`
+2. Update `configs/market_features.yaml`
+3. Rebuild Silver layer
+
+### **Enhancing News Analysis**
+1. Customize `src/fingpt_processor.py`
+2. Modify `src/build_news_features.py`
+3. Update `configs/news_features.yaml`
+
+### **Custom FinGPT Models**
+```python
+# In fingpt_processor.py
+processor = FinGPTProcessor(
+    model_name="your-custom-fingpt-model",
+    use_8bit=True
+)
+```
+
+### **2025 Live Data Collection**
+
+The pipeline includes automated collection of live data throughout 2025:
+
+#### **Market Data Collection**
+```python
+# Collect hourly USD_SGD candles
+from hourly_candle_collector import HourlyCandleCollector
+
+collector = HourlyCandleCollector(instrument="USD_SGD")
+collector.start_live_collection()  # Runs continuously
+```
+
+#### **News Data Collection**
+```python
+# Scrape SGD-relevant financial news
+from news_scraper import NewsScraper
+
+scraper = NewsScraper()
+await scraper.start_live_collection()  # Checks every 30 minutes
+```
+
+#### **Integrated Pipeline**
+```python
+# Run complete 2025 collection pipeline
+from data_collection_pipeline import DataCollectionPipeline
+
+pipeline = DataCollectionPipeline()
+await pipeline.run()  # Market + News + Monitoring
+```
+
+#### **Data Quality Monitoring**
+- Market data: Hourly candles with bid/ask spreads and volume
+- News data: SGD-relevance filtering using financial keywords
+- Pipeline health: Automated monitoring and error recovery
+- Storage: Bronze layer NDJSON format for efficient streaming
+
+### **Market Context Integration**
+```python
+# Get real-time market context
+market_context = get_latest_market_context(
+    market_features_path="data/market/silver/technical_features/sgd_vs_majors.csv"
+)
+
+# Analyze news with market context
+analysis = processor.analyze_sgd_news(
+    news_text=article,
+    headline=headline,
+    market_context=market_context
+)
+```
+
+### **XGBoost Lag Feature Engineering**
+```python
+# Create lag features for time-series patterns
+def create_lag_features(df, feature_cols, lag_periods):
+    for col in feature_cols:
+        for lag in lag_periods:
+            df[f'{col}_lag{lag}'] = df.groupby('instrument')[col].shift(lag)
+    return df
+
+# Example usage
+lag_periods = [1, 2, 3, 5, 10]
+market_features = ['ret_1', 'ret_5', 'vol_20', 'spread_pct']
+news_features = ['sentiment_score', 'sgd_directional_signal']
+
+# Create lagged features
+df_with_lags = create_lag_features(df, market_features + news_features, lag_periods)
+```
+
+### **XGBoost Model Configuration**
+```python
+# Optimized XGBoost parameters for FX prediction
+xgb_params = {
+    'max_depth': 6,              # Prevent overfitting
+    'learning_rate': 0.1,        # Conservative learning
+    'n_estimators': 100,         # With early stopping
+    'subsample': 0.8,            # Row sampling
+    'colsample_bytree': 0.8,     # Feature sampling
+    'reg_alpha': 0.1,            # L1 regularization
+    'reg_lambda': 0.1,           # L2 regularization
+    'early_stopping_rounds': 10  # Prevent overfitting
+}
+```
+
+## 🚨 Important Notes
+
+### **Gold Layer Separation**
+- Market Gold: `data/market/gold/training/market_features.csv`
+- News Gold: `data/news/gold/news_signals/trading_signals.csv`
+- **These remain separate** - only merged during combined model training
+- Enables independent model development and testing
+
+### **FinGPT Requirements**
+- **GPU Recommended**: For optimal FinGPT performance
+- **Memory**: 16GB+ RAM, 8GB+ VRAM
+- **Fallback**: Automatic fallback to lexicon-based analysis if FinGPT fails
+
+## 📖 Documentation
+
+- **Feature Definitions**: See `configs/*.yaml` files
+- **API Reference**: Check docstrings in each module
+- **Configuration Guide**: See YAML config examples above
+
+## 🎯 Next Steps
+
+1. **Setup**: Run `pip install -e .` to install dependencies
+2. **Configure**: Set up your OANDA credentials in `.env`
+3. **Test**: Run `python src/orchestrate_pipelines.py --mode all`
+4. **Monitor**: Check outputs in `data/combined/models/`
+5. **Customize**: Adapt configs for your specific requirements
+
+This dual medallion architecture provides a robust, scalable foundation for sophisticated FX prediction models that intelligently combine technical market signals with enhanced financial sentiment analysis powered by FinGPT.

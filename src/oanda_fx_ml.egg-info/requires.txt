@@ -1,0 +1,15 @@
+python-dotenv
+oandapyV20
+requests
+pandas
+numpy
+scikit-learn
+xgboost
+transformers
+torch
+pyyaml
+joblib
+aiohttp
+feedparser
+beautifulsoup4
+lxml
