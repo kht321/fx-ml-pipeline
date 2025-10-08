@@ -36,6 +36,12 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         help="CSV containing topic signal features",
     )
     parser.add_argument(
+        "--fingpt-features",
+        type=Path,
+        default=Path("data/news/silver/fingpt/finllm_features.parquet"),
+        help="Parquet of FinGPT features produced between Silver and Gold",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("data/news/gold/news_signals/trading_signals.csv"),
@@ -377,6 +383,25 @@ def main(argv: Iterable[str] | None = None) -> None:
     # Merge all features
     log("Merging news features")
     merged_df = merge_news_features(sentiment_df, entity_df, topic_df)
+    # Join FinGPT features (per-article numeric features)
+    try:
+        if args.fingpt_features.exists():
+            fingpt_df = pd.read_parquet(args.fingpt_features)
+            if "event_timestamp" in fingpt_df.columns:
+                fingpt_df = fingpt_df.rename(columns={"event_timestamp": "published_at"})
+            fingpt_df["published_at"] = pd.to_datetime(fingpt_df["published_at"], utc=True, errors="coerce")
+            keep_cols = [
+                "story_id","published_at","instrument",
+                "sentiment_score","volatility_score","uncertainty_score","fear_score","surprise_factor",
+                "macroeconomic_score","relevance_score","geography_score","market_liquidity_impact",
+                "safe_haven_indicator","market_risk_appetite",
+            ]
+            cols = [c for c in keep_cols if c in fingpt_df.columns]
+            merge_keys = [k for k in ["story_id","published_at"] if k in merged_df.columns and k in fingpt_df.columns]
+            if merge_keys:
+                merged_df = merged_df.merge(fingpt_df[cols], on=merge_keys, how="left")
+    except Exception:
+        pass
 
     if merged_df.empty:
         log("No data after merging - cannot proceed")
