@@ -48,7 +48,7 @@ python src/orchestrate_pipelines.py --mode all --bronze-to-silver --silver-to-go
 | **Model Evaluation** | 🚧 | Metrics, backtests, plots, feature importances |
 | **API Development** | 🚧 | REST/WebSocket serving for predictions |
 | **Monitoring** | 🚧 | Add Prometheus/Grafana dashboards |
-| **Airflow DAGs** | 🚧 | Add DAG files and schedules (see docs/AIRFLOW.md) |
+| **Airflow DAGs** | 🚧 | Add DAG files and schedules |
 
 ### 📋 Planned
 
@@ -77,7 +77,7 @@ News Data (Scraped) → Bronze → Silver → Gold ─┘
 - **NLP**: FinGPT for financial sentiment analysis
 - **Storage**: NDJSON (Bronze), CSV (Silver/Gold)
 - **Orchestration**: Python scripts with continuous monitoring
- - See Airflow guide: `docs/AIRFLOW.md`
+ 
 
 ## Performance Targets
 
@@ -121,8 +121,7 @@ News Data (Scraped) → Bronze → Silver → Gold ─┘
 ## Contact & Support
 
 For questions or issues:
-1. Check documentation in [docs/](docs/)
-   - Airflow setup: `docs/AIRFLOW.md`
+1. Check documentation
 2. Review code examples in [src/](src/)
 3. Contact project team
 
