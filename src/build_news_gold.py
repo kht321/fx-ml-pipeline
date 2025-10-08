@@ -409,9 +409,27 @@ def main(argv: Iterable[str] | None = None) -> None:
     # Sort by time and currency
     trading_signals = trading_signals.sort_values(['currency', 'signal_time']).reset_index(drop=True)
 
-    # Save to Gold layer
+    # Save to Gold layer (CSV)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     trading_signals.to_csv(args.output, index=False)
+    # Also save Parquet for Feast (best effort)
+    try:
+        pq_path = args.output.with_suffix('.parquet')
+        df_parquet = trading_signals.copy()
+        if 'event_timestamp' not in df_parquet.columns:
+            ts_col = None
+            for c in ['signal_time', 'published_at', 'time', 'timestamp']:
+                if c in df_parquet.columns:
+                    ts_col = c
+                    break
+            if ts_col is not None:
+                df_parquet = df_parquet.rename(columns={ts_col: 'event_timestamp'})
+        # For Feast, map currency->instrument for consistency
+        if 'instrument' not in df_parquet.columns and 'currency' in df_parquet.columns:
+            df_parquet['instrument'] = df_parquet['currency']
+        df_parquet.to_parquet(pq_path, index=False)
+    except Exception:
+        pass
 
     # Summary statistics
     currencies = trading_signals['currency'].unique()

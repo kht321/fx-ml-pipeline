@@ -1,0 +1,10 @@
+project: fx_ml
+registry: feature_repo/registry.db
+provider: local
+offline_store:
+  type: file
+  # We will point Parquet sources directly in FeatureView definitions
+online_store:
+  type: redis
+  connection_string: redis://localhost:6379
+

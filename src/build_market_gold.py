@@ -307,9 +307,26 @@ def main(argv: Iterable[str] | None = None) -> None:
     # Sort by time and instrument
     final_df = final_df.sort_values(['instrument', 'time']).reset_index(drop=True)
 
-    # Save to Gold layer
+    # Save to Gold layer (CSV)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     final_df.to_csv(args.output, index=False)
+
+    # Also write Parquet for Feast (with event_timestamp)
+    try:
+        parquet_path = args.output.with_suffix('.parquet')
+        df_parquet = final_df.copy()
+        if 'event_timestamp' not in df_parquet.columns:
+            ts_col = None
+            for c in ['time', 'timestamp', 'window_end', 'asof_time']:
+                if c in df_parquet.columns:
+                    ts_col = c
+                    break
+            if ts_col is not None:
+                df_parquet = df_parquet.rename(columns={ts_col: 'event_timestamp'})
+        df_parquet.to_parquet(parquet_path, index=False)
+    except Exception as _e:
+        # Parquet output is best-effort for Feast setup
+        pass
 
     # Summary statistics
     instruments = final_df['instrument'].unique()
