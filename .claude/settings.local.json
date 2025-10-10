@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_fingpt_load.py:*)",
+      "Bash(python test_fingpt_proper.py:*)",
+      "Bash(pip install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

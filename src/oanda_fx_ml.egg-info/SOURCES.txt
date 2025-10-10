@@ -2,10 +2,14 @@ LICENSE
 README.md
 pyproject.toml
 src/__init__.py
+src/apply_fingpt.py
+src/build_labels.py
 src/build_market_features.py
+src/build_market_features_from_candles.py
 src/build_market_gold.py
 src/build_news_features.py
 src/build_news_gold.py
+src/build_news_gold_fingpt.py
 src/data_collection_pipeline.py
 src/fetch_candles.py
 src/fetch_orderbook.py

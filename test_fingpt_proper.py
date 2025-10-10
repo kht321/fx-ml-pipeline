@@ -24,23 +24,23 @@ print(f"{'='*80}")
 start = time.time()
 
 try:
-    # Load tokenizer from base model
+    # Load tokenizer from base model (use slow tokenizer to avoid tiktoken issues)
     print("\n1. Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=False)
 
     # Set pad token if not set
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     tok_time = time.time() - start
-    print(f"   ✓ Tokenizer loaded in {tok_time:.2f}s")
+    print(f"   [OK] Tokenizer loaded in {tok_time:.2f}s")
 
     # Load base model
     print("\n2. Loading base model (13B parameters - this will take 5-10 minutes)...")
     print("   This is a large model that requires ~30GB RAM")
     start_model = time.time()
 
-    # Determine device and load model
+    # Determine device and load model - Force CPU to avoid MPS generation issues
     if torch.cuda.is_available():
         print("   Using CUDA with 8-bit quantization")
         base_model = AutoModelForCausalLM.from_pretrained(
@@ -50,25 +50,21 @@ try:
             torch_dtype=torch.float16
         )
         device = "cuda"
-    elif torch.backends.mps.is_available():
-        print("   Using MPS (Apple Silicon) with float16")
-        print("   WARNING: This will use ~26GB RAM and take 5-10 minutes")
+    else:
+        print("   Using CPU (MPS disabled due to generation issues)")
+        print("   WARNING: This will use significant RAM and be slower")
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            torch_dtype=torch.float16,
+            torch_dtype=torch.float32,
+            device_map={"": "cpu"},
             low_cpu_mem_usage=True
         )
-        base_model = base_model.to("mps")
-        device = "mps"
-    else:
-        print("   ERROR: This requires either CUDA GPU or Apple Silicon (MPS)")
-        print("   CPU-only loading would require 50GB+ RAM and be extremely slow")
-        exit(1)
+        device = "cpu"
 
     model_time = time.time() - start_model
     params = sum(p.numel() for p in base_model.parameters()) / 1e9
 
-    print(f"   ✓ Base model loaded in {model_time:.2f}s ({model_time/60:.1f} min)")
+    print(f"   [OK] Base model loaded in {model_time:.2f}s ({model_time/60:.1f} min)")
     print(f"   Parameters: {params:.2f}B")
     print(f"   Device: {device}")
 
@@ -84,7 +80,7 @@ try:
     model.eval()  # Set to evaluation mode
 
     lora_time = time.time() - start_lora
-    print(f"   ✓ LoRA adapter applied in {lora_time:.2f}s")
+    print(f"   [OK] LoRA adapter applied in {lora_time:.2f}s")
 
     # Step 3: Test inference
     print(f"\n{'='*80}")
@@ -111,9 +107,9 @@ Sentiment (positive/negative/neutral):"""
 
         inputs = tokenizer(prompt, return_tensors="pt")
 
-        # Move to device
-        if device == "mps":
-            inputs = {k: v.to("mps") for k, v in inputs.items()}
+        # Move to device if needed (CPU doesn't need explicit move)
+        if device == "cuda":
+            inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
         start = time.time()
 
@@ -142,7 +138,7 @@ Sentiment (positive/negative/neutral):"""
 
     # Final summary
     print(f"{'='*80}")
-    print(f"✓ SUCCESS! FinGPT IS NOW WORKING")
+    print(f"SUCCESS! FinGPT IS NOW WORKING")
     print(f"{'='*80}")
     print(f"\nPerformance Summary:")
     print(f"  Tokenizer load:      {tok_time:.2f}s")
@@ -159,7 +155,7 @@ Sentiment (positive/negative/neutral):"""
     print(f"  But FinGPT provides richer, more nuanced analysis")
 
 except Exception as e:
-    print(f"\n✗ FAILED")
+    print(f"\nFAILED")
     print(f"Error: {type(e).__name__}: {e}")
     import traceback
     traceback.print_exc()

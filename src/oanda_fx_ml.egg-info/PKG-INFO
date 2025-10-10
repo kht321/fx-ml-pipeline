@@ -62,17 +62,19 @@ python src/orchestrate_pipelines.py --mode all --bronze-to-silver --silver-to-go
 | **Data Collection** | ✅ | Live OANDA streaming + news scraping |
 | **Bronze Layer** | ✅ | Raw data storage in NDJSON format |
 | **Market Pipeline** | ✅ | Bronze → Silver → Gold processing |
-| **News Pipeline** | ✅ | FinGPT sentiment analysis pipeline |
+| **News Pipeline** | ✅ | Bronze → Silver → FinGPT → Gold |
 | **XGBoost Models** | ✅ | Training with lag features |
 | **Orchestration** | ✅ | Automated pipeline coordination |
+| **Feast Setup** | ✅ | Local feature repo (offline Parquet, Redis online) |
 
 ### 🚧 In Progress
 
 | Component | Status | Next Steps |
 |-----------|--------|------------|
-| **Model Evaluation** | 🚧 | Complete performance metrics |
-| **API Development** | 🚧 | REST endpoint for predictions |
+| **Model Evaluation** | 🚧 | Metrics, backtests, plots, feature importances |
+| **API Development** | 🚧 | REST/WebSocket serving for predictions |
 | **Monitoring** | 🚧 | Add Prometheus/Grafana dashboards |
+| **Airflow DAGs** | 🚧 | Add DAG files and schedules |
 
 ### 📋 Planned
 
@@ -101,6 +103,7 @@ News Data (Scraped) → Bronze → Silver → Gold ─┘
 - **NLP**: FinGPT for financial sentiment analysis
 - **Storage**: NDJSON (Bronze), CSV (Silver/Gold)
 - **Orchestration**: Python scripts with continuous monitoring
+ 
 
 ## Performance Targets
 
@@ -117,11 +120,13 @@ News Data (Scraped) → Bronze → Silver → Gold ─┘
 
 - [x] Complete data collection infrastructure
 - [x] Implement dual medallion pipelines
-- [x] Build FinGPT integration
+- [x] Build FinGPT integration (Silver → Gold)
 - [x] Train XGBoost models with lag features
+- [x] Add Feast repo and Parquet outputs
 - [ ] Complete model evaluation
 - [ ] Deploy prediction API
 - [ ] Add monitoring dashboards
+- [ ] Add Airflow DAGs and schedules
 
 ### Known Issues
 
@@ -142,7 +147,7 @@ News Data (Scraped) → Bronze → Silver → Gold ─┘
 ## Contact & Support
 
 For questions or issues:
-1. Check documentation in [docs/](docs/)
+1. Check documentation
 2. Review code examples in [src/](src/)
 3. Contact project team
 

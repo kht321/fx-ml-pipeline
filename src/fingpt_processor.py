@@ -56,7 +56,12 @@ class FinGPTProcessor:
             raise ImportError("transformers required. Install with: pip install transformers torch")
 
         self.model_name = model_name
+        # Force CPU to avoid MPS issues with generation tasks
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Disable MPS even if available
+        if self.device == "mps":
+            logging.warning("MPS device requested but forcing CPU to avoid generation issues")
+            self.device = "cpu"
         self.use_8bit = use_8bit
 
         self._load_model()
@@ -69,13 +74,19 @@ class FinGPTProcessor:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
             # Configure model loading options
-            model_kwargs = {
-                "torch_dtype": torch.float16,
-                "device_map": "auto" if self.device == "cuda" else None,
-            }
-
-            if self.use_8bit and self.device == "cuda":
-                model_kwargs["load_in_8bit"] = True
+            if self.device == "cuda":
+                model_kwargs = {
+                    "torch_dtype": torch.float16,
+                    "device_map": "auto",
+                }
+                if self.use_8bit:
+                    model_kwargs["load_in_8bit"] = True
+            else:
+                # CPU configuration - use float32 and explicit device mapping
+                model_kwargs = {
+                    "torch_dtype": torch.float32,
+                    "device_map": {"": "cpu"},
+                }
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
@@ -87,8 +98,8 @@ class FinGPTProcessor:
                 "text-generation",
                 model=self.model,
                 tokenizer=self.tokenizer,
-                device=0 if self.device == "cuda" else -1,
-                torch_dtype=torch.float16 if self.device == "cuda" else None
+                device=-1,  # Force CPU for pipeline
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
             )
 
             logging.info(f"FinGPT loaded successfully on {self.device}")

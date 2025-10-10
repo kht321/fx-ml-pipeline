@@ -1,36 +1,54 @@
-"""Test loading FinGPT model to diagnose issues."""
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import time
+"""Test loading FinGPT model using the updated processor with CPU."""
+import sys
+import logging
+from pathlib import Path
 
-print(f"PyTorch version: {torch.__version__}")
-print(f"CUDA available: {torch.cuda.is_available()}")
-print(f"MPS available: {torch.backends.mps.is_available()}")
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-model_name = "FinGPT/fingpt-sentiment_llama2-13b_lora"
-print(f"\nAttempting to load: {model_name}")
-print(f"Start time: {time.strftime('%H:%M:%S')}")
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 try:
-    print("\n1. Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    print(f"   ✓ Tokenizer loaded")
+    from fingpt_processor import FinGPTProcessor, create_processor
 
-    print("\n2. Loading model...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True
+    print("=" * 60)
+    print("Testing FinGPT Processor with CPU configuration")
+    print("=" * 60)
+
+    # Test 1: Create processor with CPU explicitly
+    print("\n[Test 1] Creating FinGPT processor with device='cpu'...")
+    processor = create_processor(
+        use_fingpt=True,
+        device="cpu",
+        use_8bit=False
     )
-    print(f"   ✓ Model loaded")
-    print(f"   Device: {model.device}")
-    print(f"   Dtype: {model.dtype}")
 
-    print(f"\nEnd time: {time.strftime('%H:%M:%S')}")
-    print("\n✓ SUCCESS: FinGPT model loaded successfully!")
+    print(f"Processor type: {type(processor).__name__}")
+
+    if isinstance(processor, FinGPTProcessor):
+        print(f"Device: {processor.device}")
+        print(f"Model name: {processor.model_name}")
+        print("\nSuccess! FinGPT processor loaded on CPU")
+
+        # Test 2: Quick inference test
+        print("\n[Test 2] Testing inference with sample news...")
+        test_text = "Singapore's GDP grew 3.5% in Q4, exceeding expectations."
+        result = processor.analyze_sgd_news(test_text, "Singapore GDP Growth")
+
+        print(f"\nAnalysis Results:")
+        print(f"  Sentiment Score: {result.sentiment_score:.2f}")
+        print(f"  Confidence: {result.confidence:.2f}")
+        print(f"  SGD Signal: {result.sgd_directional_signal:.2f}")
+        print(f"  Policy Implications: {result.policy_implications}")
+
+        print("\n" + "=" * 60)
+        print("All tests passed!")
+        print("=" * 60)
+    else:
+        print(f"\nNote: Fell back to {type(processor).__name__}")
+        print("This is expected if FinGPT model is not available")
 
 except Exception as e:
-    print(f"\n✗ ERROR: {type(e).__name__}: {e}")
+    print(f"\nERROR: {type(e).__name__}: {e}")
     import traceback
     traceback.print_exc()
