@@ -11,16 +11,31 @@ tokenizer = AutoTokenizer.from_pretrained(base_model_name)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-base_model = AutoModelForCausalLM.from_pretrained(
-    base_model_name,
-    torch_dtype=torch.float16,
-    low_cpu_mem_usage=True
-)
-base_model = base_model.to("mps")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+if device == "cuda":
+    print("Using CUDA with float16 weights")
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        load_in_8bit=True,
+        device_map="auto",
+        torch_dtype=torch.float16,
+    )
+else:
+    if torch.backends.mps.is_available():
+        print("MPS available but disabled to avoid generation issues; using CPU.")
+    print("Loading base model on CPU (this may take several minutes)")
+    base_model = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        torch_dtype=torch.float32,
+        low_cpu_mem_usage=True,
+        device_map={"": "cpu"},
+    )
 
 # Apply LoRA
 model = PeftModel.from_pretrained(base_model, "FinGPT/fingpt-sentiment_llama2-13b_lora")
 model.eval()
+if device == "cuda":
+    model = model.to("cuda")
 
 print("✓ Model loaded\n")
 
@@ -35,7 +50,9 @@ print("Prompt:")
 print(prompt)
 print("\n" + "="*80)
 
-inputs = tokenizer(prompt, return_tensors="pt").to("mps")
+inputs = tokenizer(prompt, return_tensors="pt")
+if device == "cuda":
+    inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
 print("Generating response...")
 with torch.no_grad():

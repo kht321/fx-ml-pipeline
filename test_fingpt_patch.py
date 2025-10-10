@@ -40,6 +40,10 @@ print(f"Python version: {sys.version}")
 print(f"CUDA available: {torch.cuda.is_available()}")
 print(f"MPS available: {torch.backends.mps.is_available()}")
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+if device != "cuda" and torch.backends.mps.is_available():
+    print("NOTE: MPS is available but disabled to avoid generation issues. Falling back to CPU.")
+
 model_name = "FinGPT/fingpt-sentiment_llama2-13b_lora"
 print(f"\n{'='*80}")
 print(f"Loading FinGPT: {model_name}")
@@ -64,24 +68,20 @@ try:
         "low_cpu_mem_usage": True,
     }
 
-    if torch.cuda.is_available():
+    if device == "cuda":
         load_kwargs["load_in_8bit"] = True
         load_kwargs["device_map"] = "auto"
-    elif torch.backends.mps.is_available():
-        # MPS (Apple Silicon) - use float16
-        load_kwargs["torch_dtype"] = torch.float16
-        print("   Using MPS (Apple Silicon) acceleration with float16")
     else:
         # CPU only - this will be slow and memory intensive
         load_kwargs["torch_dtype"] = torch.float32
+        load_kwargs["device_map"] = {"": "cpu"}
         print("   WARNING: Loading on CPU - this will be very slow!")
 
     model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
 
-    # Move to MPS if available (for non-CUDA systems)
-    if torch.backends.mps.is_available() and not torch.cuda.is_available():
-        model = model.to("mps")
-        print("   Model moved to MPS device")
+    # Move to CUDA if available
+    if device == "cuda":
+        print("   Model will leverage CUDA device_map auto-placement")
 
     load_time = time.time() - start
     params = sum(p.numel() for p in model.parameters()) / 1e9
@@ -97,8 +97,8 @@ try:
     inputs = tokenizer(test_text, return_tensors="pt")
 
     # Move inputs to same device as model
-    if torch.backends.mps.is_available() and not torch.cuda.is_available():
-        inputs = {k: v.to("mps") for k, v in inputs.items()}
+    if device == "cuda":
+        inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
     start = time.time()
 

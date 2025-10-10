@@ -48,6 +48,9 @@ print(f"\nPyTorch version: {torch.__version__}")
 print(f"Python version: {sys.version}")
 print(f"CUDA available: {torch.cuda.is_available()}")
 print(f"MPS available: {torch.backends.mps.is_available()}")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+if device != "cuda" and torch.backends.mps.is_available():
+    print("NOTE: MPS detected but disabled to avoid generation issues. Using CPU fallback.")
 
 model_name = "FinGPT/fingpt-sentiment_llama2-13b_lora"
 print(f"\n{'='*80}")
@@ -67,7 +70,7 @@ try:
     start = time.time()
 
     # Determine best device and settings
-    if torch.cuda.is_available():
+    if device == "cuda":
         print("   Using CUDA with 8-bit quantization")
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -76,23 +79,16 @@ try:
             trust_remote_code=True
         )
         device = "cuda"
-    elif torch.backends.mps.is_available():
-        print("   Using MPS (Apple Silicon) with float16")
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True,
-            trust_remote_code=True
-        )
-        model = model.to("mps")
-        device = "mps"
     else:
         print("   WARNING: Using CPU - this will be VERY slow!")
+        if torch.backends.mps.is_available():
+            print("   (MPS disabled intentionally due to unstable generation behaviour)")
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float32,
             low_cpu_mem_usage=True,
-            trust_remote_code=True
+            trust_remote_code=True,
+            device_map={"": "cpu"}
         )
         device = "cpu"
 
@@ -117,9 +113,7 @@ try:
         inputs = tokenizer(text, return_tensors="pt")
 
         # Move inputs to same device as model
-        if device == "mps":
-            inputs = {k: v.to("mps") for k, v in inputs.items()}
-        elif device == "cuda":
+        if device == "cuda":
             inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
         start = time.time()

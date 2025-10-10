@@ -8,6 +8,8 @@ print(f"PyTorch version: {torch.__version__}")
 print(f"Python version: {__import__('sys').version}")
 print(f"CUDA available: {torch.cuda.is_available()}")
 print(f"MPS available: {torch.backends.mps.is_available()}")
+if not torch.cuda.is_available() and torch.backends.mps.is_available():
+    print("NOTE: MPS detected but disabled to avoid generation issues. Using CPU fallback.")
 
 # Try different FinGPT models
 models_to_try = [
@@ -40,7 +42,7 @@ for model_name in models_to_try:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
+            device_map="auto" if torch.cuda.is_available() else {"": "cpu"},
             trust_remote_code=True,
             low_cpu_mem_usage=True
         )

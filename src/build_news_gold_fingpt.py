@@ -99,18 +99,15 @@ def load_fingpt_model(base_model_name: str, lora_adapter_name: str):
             torch_dtype=torch.float16
         )
         device = "cuda"
-    elif torch.backends.mps.is_available():
-        log("    Using MPS (Apple Silicon) with float16")
+    else:
+        log("    Using CPU execution (MPS disabled due to generation instability)")
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+            device_map={"": "cpu"}
         )
-        base_model = base_model.to("mps")
-        device = "mps"
-    else:
-        log("    ERROR: Requires CUDA or MPS acceleration")
-        sys.exit(1)
+        device = "cpu"
 
     # Apply LoRA adapter
     log("  Applying FinGPT LoRA adapter...")
@@ -323,9 +320,7 @@ def process_article_with_fingpt(
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
 
     # Move to device
-    if device == "mps":
-        inputs = {k: v.to("mps") for k, v in inputs.items()}
-    elif device == "cuda":
+    if device == "cuda":
         inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
     # Generate
