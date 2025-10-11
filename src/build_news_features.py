@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Optional
 
 import pandas as pd
 
@@ -305,10 +305,11 @@ class NewsProcessor:
         currency_mentions = list(words & CURRENCY_CODES)
 
         # Simple sentiment score
+        total_words = len(text.split())
         if positive_hits > negative_hits:
-            sentiment_score = min(1.0, (positive_hits - negative_hits) / max(len(words.split()), 1))
+            sentiment_score = min(1.0, (positive_hits - negative_hits) / max(total_words, 1))
         elif negative_hits > positive_hits:
-            sentiment_score = max(-1.0, (positive_hits - negative_hits) / max(len(words.split()), 1))
+            sentiment_score = max(-1.0, (positive_hits - negative_hits) / max(total_words, 1))
         else:
             sentiment_score = 0.0
 
@@ -455,7 +456,7 @@ def log(message: str) -> None:
     sys.stderr.flush()
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Main processing loop for news feature engineering."""
     args = parse_args(argv or sys.argv[1:])
 

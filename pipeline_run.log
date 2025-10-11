@@ -1,0 +1,35 @@
+[2025-10-10T20:46:24.524537] [INFO] [orchestrate] Starting pipeline orchestration (mode: all)
+[2025-10-10T20:46:24.524545] [INFO] [orchestrate] Configuration loaded from: configs/combined_features.yaml
+[2025-10-10T20:46:24.524547] [INFO] [orchestrate] === Starting Market Pipeline ===
+[2025-10-10T20:46:24.524623] [WARNING] [orchestrate] No bronze price data found - skipping market feature processing
+[2025-10-10T20:46:24.524626] [INFO] [orchestrate] Starting: Market Silver → Gold consolidation
+[2025-10-10T20:46:24.524628] [DEBUG] [orchestrate] Command: python src/build_market_gold.py --technical-features data/market/silver/technical_features/sgd_vs_majors.csv --microstructure-features data/market/silver/microstructure/depth_features.csv --volatility-features data/market/silver/volatility/risk_metrics.csv --output data/market/gold/training/market_features.csv --feature-selection all
+[2025-10-10T20:46:25.074726] [INFO] [orchestrate] Completed: Market Silver → Gold consolidation
+[2025-10-10T20:46:25.074760] [INFO] [orchestrate] Market pipeline completed: SUCCESS
+[2025-10-10T20:46:25.074773] [INFO] [orchestrate] === Starting News Pipeline ===
+[2025-10-10T20:46:25.074938] [WARNING] [orchestrate] No bronze news data found - skipping news feature processing
+[2025-10-10T20:46:25.074943] [INFO] [orchestrate] Starting: News Silver → Gold signal generation
+[2025-10-10T20:46:25.074946] [DEBUG] [orchestrate] Command: python src/build_news_gold.py --sentiment-features data/news/silver/sentiment_scores/sentiment_features.csv --entity-features data/news/silver/entity_mentions/entity_features.csv --topic-features data/news/silver/topic_signals/topic_features.csv --output data/news/gold/news_signals/trading_signals.csv --lookback-hours 24 --min-confidence 0.3
+[2025-10-10T20:46:25.272221] [ERROR] [orchestrate] Failed: News Silver → Gold signal generation
+[2025-10-10T20:46:25.272240] [ERROR] [orchestrate] Error: [build_news_gold] Loading Silver layer news features
+[build_news_gold] No sentiment features found - cannot proceed
+[2025-10-10T20:46:25.272242] [INFO] [orchestrate] News pipeline completed: FAILURE
+[2025-10-10T20:46:25.272255] [INFO] [orchestrate] === Starting Combined Modeling ===
+[2025-10-10T20:46:25.272329] [WARNING] [orchestrate] News Gold data not available - training market-only models
+[2025-10-10T20:46:25.272335] [INFO] [orchestrate] Starting: Combined model training
+[2025-10-10T20:46:25.272338] [DEBUG] [orchestrate] Command: python src/train_combined_model.py --market-features data/market/gold/training/market_features.csv --news-signals data/news/gold/news_signals/trading_signals.csv --output-dir data/combined/models --focus-currency USD_SGD --models logistic_regression random_forest gradient_boosting --cross-validation
+[2025-10-10T20:46:26.051993] [ERROR] [orchestrate] Failed: Combined model training
+[2025-10-10T20:46:26.052011] [ERROR] [orchestrate] Error: Traceback (most recent call last):
+  File "/Users/kevintaukoor/Projects/MLE Group Original/fx-ml-pipeline/src/train_combined_model.py", line 449, in <module>
+    def main(argv: Iterable[str] | None = None) -> None:
+TypeError: unsupported operand type(s) for |: '_GenericAlias' and 'NoneType'
+[2025-10-10T20:46:26.052014] [INFO] [orchestrate] Combined modeling completed: FAILURE
+[2025-10-10T20:46:26.052166] [INFO] [orchestrate] Pipeline health: 2/7 components healthy
+[2025-10-10T20:46:26.052169] [INFO] [orchestrate]   ✗ market_bronze
+[2025-10-10T20:46:26.052171] [INFO] [orchestrate]   ✓ market_silver
+[2025-10-10T20:46:26.052172] [INFO] [orchestrate]   ✓ market_gold
+[2025-10-10T20:46:26.052173] [INFO] [orchestrate]   ✗ news_bronze
+[2025-10-10T20:46:26.052174] [INFO] [orchestrate]   ✗ news_silver
+[2025-10-10T20:46:26.052175] [INFO] [orchestrate]   ✗ news_gold
+[2025-10-10T20:46:26.052175] [INFO] [orchestrate]   ✗ combined_models
+[2025-10-10T20:46:26.052177] [ERROR] [orchestrate] Pipeline orchestration failed

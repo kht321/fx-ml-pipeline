@@ -9,12 +9,12 @@ Outputs labels at (instrument, event_timestamp) for horizons:
 
 import argparse
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 import pandas as pd
 
 
-def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--prices", type=Path, default=Path("data/market/silver/technical_features/sgd_vs_majors.csv"), help="Price features table with at least instrument, time, close")
     p.add_argument("--output", type=Path, default=Path("data/combined/gold/labels/labels.parquet"))
@@ -71,7 +71,7 @@ def build_labels(df: pd.DataFrame) -> pd.DataFrame:
     return labels.dropna(subset=["event_timestamp"])  # keep rows with valid timestamps
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
     if not args.prices.exists():
         args.output.parent.mkdir(parents=True, exist_ok=True)

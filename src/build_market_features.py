@@ -9,7 +9,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 import pandas as pd
 import numpy as np
@@ -68,7 +68,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     return parser.parse_args(list(argv))
 
 
-def parse_price_tick(line: str) -> dict | None:
+def parse_price_tick(line: str) -> Optional[dict]:
     """Parse a single tick JSON line and extract price data."""
     try:
         tick = json.loads(line.strip())
@@ -270,7 +270,7 @@ def log(message: str) -> None:
     sys.stderr.flush()
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Main processing loop for market feature engineering."""
     args = parse_args(argv or sys.argv[1:])
 

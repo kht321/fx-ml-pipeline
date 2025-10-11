@@ -70,7 +70,7 @@ def log(message: str) -> None:
     sys.stderr.flush()
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Start the streaming loop and coordinate persistence/forwarding."""
     args = parse_args(argv or sys.argv[1:])
 

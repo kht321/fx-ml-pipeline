@@ -8,7 +8,7 @@ The Gold layer emphasizes actionable signals over raw sentiment.
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -78,7 +78,7 @@ def load_news_features(sentiment_path: Path,
     # Load sentiment features
     if sentiment_path.exists():
         sentiment_df = pd.read_csv(sentiment_path)
-        sentiment_df['published_at'] = pd.to_datetime(sentiment_df['published_at'])
+        sentiment_df['published_at'] = pd.to_datetime(sentiment_df['published_at'], format='mixed', utc=True)
         dfs['sentiment'] = sentiment_df
     else:
         dfs['sentiment'] = pd.DataFrame()
@@ -86,7 +86,7 @@ def load_news_features(sentiment_path: Path,
     # Load entity features
     if entity_path.exists():
         entity_df = pd.read_csv(entity_path)
-        entity_df['published_at'] = pd.to_datetime(entity_df['published_at'])
+        entity_df['published_at'] = pd.to_datetime(entity_df['published_at'], format='mixed', utc=True)
         dfs['entity'] = entity_df
     else:
         dfs['entity'] = pd.DataFrame()
@@ -94,7 +94,7 @@ def load_news_features(sentiment_path: Path,
     # Load topic features
     if topic_path.exists():
         topic_df = pd.read_csv(topic_path)
-        topic_df['published_at'] = pd.to_datetime(topic_df['published_at'])
+        topic_df['published_at'] = pd.to_datetime(topic_df['published_at'], format='mixed', utc=True)
         dfs['topic'] = topic_df
     else:
         dfs['topic'] = pd.DataFrame()
@@ -360,7 +360,7 @@ def log(message: str) -> None:
     sys.stderr.flush()
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Main processing function for news Gold layer."""
     args = parse_args(argv or sys.argv[1:])
 

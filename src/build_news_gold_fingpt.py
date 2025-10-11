@@ -111,7 +111,8 @@ def load_fingpt_model(base_model_name: str, lora_adapter_name: str):
 
     # Apply LoRA adapter
     log("  Applying FinGPT LoRA adapter...")
-    model = PeftModel.from_pretrained(base_model, lora_adapter_name)
+    peft_kwargs = {"device_map": {"": device}}
+    model = PeftModel.from_pretrained(base_model, lora_adapter_name, **peft_kwargs)
     model.eval()
 
     log(f"  ✓ FinGPT loaded on {device}")

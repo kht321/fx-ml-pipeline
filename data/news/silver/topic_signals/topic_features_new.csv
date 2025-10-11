@@ -1,0 +1,14 @@
+story_id,published_at,source,sentiment_score,mentions_sgd,topic_category,relevance_score
+article_0007,2025-10-02 09:04:39,bloomberg_asia,0.0,False,financial,0.0
+article_0011,2025-10-02 15:03:32,bloomberg_asia,0.030303030303030304,False,financial,0.0
+article_0010,2025-10-02 15:15:14,bloomberg_asia,0.0,False,financial,0.0
+article_0006,2025-10-02 07:12:28,bloomberg_asia,0.06451612903225806,False,financial,0.0
+article_0001,2025-10-02 17:47:22,bloomberg_asia,0.0,False,financial,0.0
+article_0000,2025-10-01 22:30:03,bloomberg_asia,0.0,False,financial,0.0
+article_0003,2025-10-02 16:48:55,bloomberg_asia,-0.02857142857142857,False,financial,0.0
+article_0002,2025-10-02 17:35:53,bloomberg_asia,0.0,False,financial,0.0
+article_0009,2025-10-02 15:10:49,bloomberg_asia,0.0,False,financial,0.0
+article_0005,2025-10-02 00:25:45,bloomberg_asia,0.021739130434782608,False,financial,0.0
+article_0004,2025-10-02 16:30:00,bloomberg_asia,0.0,False,financial,0.0
+article_0012,2025-10-02 18:29:00+08:00,channelnewsasia_business,-0.003194888178913738,True,financial,1.0
+article_0008,2025-10-02 10:59:25,bloomberg_asia,0.022727272727272728,False,financial,0.0

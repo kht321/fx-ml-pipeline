@@ -8,7 +8,7 @@ signals for SGD FX prediction.
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,7 @@ from sklearn.preprocessing import StandardScaler
 from joblib import dump, load
 
 
-def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     """Expose CLI controls for combined model training."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -446,7 +446,7 @@ def log(message: str) -> None:
     print(f"[train_combined_model] {message}")
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Main training function for combined models."""
     args = parse_args(argv)
 

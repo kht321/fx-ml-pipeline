@@ -1,0 +1,14 @@
+story_id,headline,published_at,source,sentiment_score,confidence,sentiment_score_lexicon,positive_hits,negative_hits,volatility_hits,policy_tone,hawkish_hits,dovish_hits
+article_0007,Emerging Currencies Slip as Dollar Halts Rout Amid Data Delays,2025-10-02 09:04:39,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0011,"Africa Stocks Rally Into Global Top 20 on Reforms, Dollar Dip",2025-10-02 15:03:32,bloomberg_asia,0.030303030303030304,0.3,0.030303030303030304,1,0,0,neutral,0,0
+article_0010,Dollar Doubts Are Showing Up in the Corporate Bond Market,2025-10-02 15:15:14,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0006,European Stocks Hit Record High as Investors Bet on Fed Cuts,2025-10-02 07:12:28,bloomberg_asia,0.06451612903225806,0.3,0.06451612903225806,2,0,0,neutral,0,0
+article_0001,UBS Funds Face Half-Billion-Dollar Exposure to First Brands,2025-10-02 17:47:22,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0000,Stocks Churn as Trump Threatens Federal Job Cuts: Markets Wrap,2025-10-01 22:30:03,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0003,"Crypto Bill Seen Hindering Fraud Prosecutions, States Warn",2025-10-02 16:48:55,bloomberg_asia,-0.02857142857142857,0.3,-0.02857142857142857,0,1,0,neutral,0,0
+article_0002,Top FX Forecaster Says Fed Remarks Key for Dollar Amid Shutdown,2025-10-02 17:35:53,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0009,"Glencore, Credit Agricole Prepare Canadian-Dollar Bond Sales",2025-10-02 15:10:49,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0005,"Gold Drops as Dollar Gains, Investors Take Profits After Rally",2025-10-02 00:25:45,bloomberg_asia,0.021739130434782608,0.3,0.021739130434782608,1,0,0,neutral,0,0
+article_0004,ECB’s Villeroy Urges Bold Steps to Bolster Euro’s Global Role,2025-10-02 16:30:00,bloomberg_asia,0.0,0.3,0.0,0,0,0,neutral,0,0
+article_0012,"Singapore expresses condolences over Philippine quake, stands ready to provide assistance",2025-10-02 18:29:00+08:00,channelnewsasia_business,-0.003194888178913738,0.3,-0.003194888178913738,0,1,0,neutral,0,0
+article_0008,Treasuries Rally Stalls as US Government Shutdown Delays Data,2025-10-02 10:59:25,bloomberg_asia,0.022727272727272728,0.3,0.022727272727272728,1,0,0,neutral,0,0

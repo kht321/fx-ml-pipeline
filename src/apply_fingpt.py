@@ -9,12 +9,12 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Iterable, List, Dict, Any
+from typing import Iterable, List, Dict, Any, Optional
 
 import pandas as pd
 
 
-def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--sentiment", type=Path, default=Path("data/news/silver/sentiment_scores/sentiment_features.csv"))
     p.add_argument("--entities", type=Path, default=Path("data/news/silver/entity_mentions/entity_features.csv"))
@@ -62,7 +62,7 @@ def _map_instrument_from_entities(row: pd.Series) -> str:
     return "USD_SGD"
 
 
-def run(argv: Iterable[str] | None = None) -> None:
+def run(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
 
     # Load available silver inputs

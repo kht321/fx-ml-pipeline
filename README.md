@@ -102,9 +102,14 @@ News Data (Scraped) → Bronze → Silver → Gold ─┘
 - [ ] Add monitoring dashboards
 - [ ] Add Airflow DAGs and schedules
 
+### Additional Documentation
+
+- [Complete Pipeline Report](COMPLETE_PIPELINE_REPORT.md) — end-to-end run summary, data metrics, FinGPT validation
+- [Pipeline Test Results](PIPELINE_TEST_RESULTS.md) — detailed test logs and timing snapshots
+
 ### Known Issues
 
-1. **FinGPT Memory**: Requires 16GB+ RAM, 8GB+ VRAM
+1. **FinGPT Memory**: Requires 16GB+ RAM, 8GB+ VRAM (CPU-only smoke test takes ~4 min/article)
 2. **News Coverage**: Limited to scraped sources (no paid APIs)
 3. **Currency Pairs**: Currently only USD/SGD supported
 

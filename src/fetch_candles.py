@@ -9,7 +9,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 from oanda_api import fetch_candles
 
@@ -42,7 +42,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     return parser.parse_args(list(argv))
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Execute the REST call and fan the payload out to stdout or a file."""
     args = parse_args(argv or sys.argv[1:])
     payload = fetch_candles(

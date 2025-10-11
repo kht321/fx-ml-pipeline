@@ -1,4 +1,23 @@
 sentiment,confidence,sgd_direction,sgd_strength,market_coherence,timeframe,volatility_impact,key_factors,risk_factors,trading_signal,position_size,reasoning,raw_response,inference_time,article_title,article_published,article_source
-neutral,0.5,neutral,0.5,neutral,unknown,neutral,,,hold,small,,N$}}%c$}}%�������$}}%�$}}%tu$}}%w$}}%@$}}%vg$}}%����$}}%eU$}}%eQs$}}%����$}}%x$}}%����$}}%cc}j$}}%������$}}%������������$}}%����������$}}%k[j~o$}}%��������������������������������������������������������������������������������������������������$}}%����$}}%���������s������������������������������������������������������������������������������������������������������������������������������������,35.9933557510376,Stocks Churn as Trump Threatens Federal Job Cuts: Markets Wrap,"Wed, 01 Oct 2025 22:30:03 GMT",bloomberg_asia
-neutral,0.5,neutral,0.5,neutral,unknown,neutral,,,hold,small,,�����$}}%������$}}%���������������������������������������������$}}%������������������������������������$}}%����������������������������������m����m$}}%�����������������������������������������������������������������������������������������������������������������������������������������������������������������,163.63234496116638,UBS Funds Face Half-Billion-Dollar Exposure to First Brands,"Thu, 02 Oct 2025 17:47:22 GMT",bloomberg_asia
-neutral,0.5,neutral,0.5,neutral,unknown,neutral,,,hold,small,,�������$}}%�����$}}%���$}}%��$}}%��$}}%�������������$}}%cNU\v$}}%�����������������$}}%����������$}}%������������$}}%������$}}%������$}}%���������������������������������$}}%����������������$}}%����������s��������������������������������������������������������������������������������������������������������������������������������������������������������������������,28.972707986831665,Top FX Forecaster Says Fed Remarks Key for Dollar Amid Shutdown,"Thu, 02 Oct 2025 17:35:53 GMT",bloomberg_asia
+bearish,0.7,strengthen,0.8,aligned,short_term,increase,"- President Trump threatens to cut federal jobs
+- Government shutdown extends into second day
+- US equities race to fresh highs","- Uncertainty around Trump's job cuts
+- Uncertainty around government shutdown",sell_sgd,medium,"- President Trump's threat to cut federal jobs is likely to increase volatility in the market, which could lead to a strengthening of the Singapore Dollar.
+- The government shutdown is also likely to increase volatility, as it could lead to a decrease in economic activity and a decrease in the value","SENTIMENT: bearish
+CONFIDENCE: 0.7
+SGD_DIRECTION: strengthen
+SGD_STRENGTH: 0.8
+MARKET_COHERENCE: aligned
+TIMEFRAME: short_term
+VOLATILITY_IMPACT: increase
+KEY_FACTORS:
+- President Trump threatens to cut federal jobs
+- Government shutdown extends into second day
+- US equities race to fresh highs
+RISK_FACTORS:
+- Uncertainty around Trump's job cuts
+- Uncertainty around government shutdown
+TRADING_SIGNAL: sell_sgd
+POSITION_SIZE: medium
+REASONING:
+- President Trump's threat to cut federal jobs is lik",240.96390199661255,Stocks Churn as Trump Threatens Federal Job Cuts: Markets Wrap,"Wed, 01 Oct 2025 22:30:03 GMT",bloomberg_asia

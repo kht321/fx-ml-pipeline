@@ -32,7 +32,17 @@ else:
     )
 
 # Apply LoRA
-model = PeftModel.from_pretrained(base_model, "FinGPT/fingpt-sentiment_llama2-13b_lora")
+peft_kwargs = {}
+if device == "cuda":
+    peft_kwargs["device_map"] = {"": "cuda"}
+else:
+    peft_kwargs["device_map"] = {"": "cpu"}
+
+model = PeftModel.from_pretrained(
+    base_model,
+    "FinGPT/fingpt-sentiment_llama2-13b_lora",
+    **peft_kwargs,
+)
 model.eval()
 if device == "cuda":
     model = model.to("cuda")

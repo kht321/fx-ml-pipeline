@@ -8,7 +8,7 @@ for ML model consumption.
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -136,8 +136,10 @@ def select_features(df: pd.DataFrame, strategy: str = "all") -> pd.DataFrame:
     if df.empty:
         return df
 
-    # Core columns to always keep
-    core_cols = ['time', 'instrument', 'mid', 'spread', 'ret_1', 'ret_5', 'y']
+    # Core columns to always keep (include 'y' only if it exists)
+    core_cols = ['time', 'instrument', 'mid', 'spread', 'ret_1', 'ret_5']
+    if 'y' in df.columns:
+        core_cols.append('y')
 
     if strategy == "minimal":
         # Only keep core price features
@@ -175,21 +177,29 @@ def clean_and_validate(df: pd.DataFrame, min_obs_per_instrument: int = 100) -> p
     if df.empty:
         return df
 
-    # Remove rows with missing target
-    df = df.dropna(subset=['y']).copy()
+    # Remove rows with missing target (if 'y' column exists)
+    if 'y' in df.columns:
+        df = df.dropna(subset=['y']).copy()
 
     # Handle infinite values
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     df[numeric_cols] = df[numeric_cols].replace([np.inf, -np.inf], np.nan)
 
     # Fill missing values with forward fill then median
+    exclude_cols = ['time']
+    if 'y' in df.columns:
+        exclude_cols.append('y')
+
     for col in numeric_cols:
-        if col not in ['time', 'y']:
+        if col not in exclude_cols:
             df[col] = df.groupby('instrument')[col].fillna(method='ffill')
             df[col] = df[col].fillna(df[col].median())
 
     # Remove any remaining rows with NaN in features
-    feature_cols = [col for col in df.columns if col not in ['time', 'instrument', 'y']]
+    exclude_cols = ['time', 'instrument']
+    if 'y' in df.columns:
+        exclude_cols.append('y')
+    feature_cols = [col for col in df.columns if col not in exclude_cols]
     df = df.dropna(subset=feature_cols).copy()
 
     return df
@@ -260,7 +270,7 @@ def log(message: str) -> None:
     sys.stderr.flush()
 
 
-def main(argv: Iterable[str] | None = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> None:
     """Main processing function for market Gold layer."""
     args = parse_args(argv or sys.argv[1:])
 
@@ -337,8 +347,11 @@ def main(argv: Iterable[str] | None = None) -> None:
 
     for instrument in instruments:
         inst_count = len(final_df[final_df['instrument'] == instrument])
-        target_mean = final_df[final_df['instrument'] == instrument]['y'].mean()
-        log(f"  {instrument}: {inst_count} obs, target rate: {target_mean:.3f}")
+        if 'y' in final_df.columns:
+            target_mean = final_df[final_df['instrument'] == instrument]['y'].mean()
+            log(f"  {instrument}: {inst_count} obs, target rate: {target_mean:.3f}")
+        else:
+            log(f"  {instrument}: {inst_count} obs")
 
 
 if __name__ == "__main__":
