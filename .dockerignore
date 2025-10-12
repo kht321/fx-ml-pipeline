@@ -1,0 +1,83 @@
+# Docker ignore file - exclude unnecessary files from Docker context
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Data files (large files should be downloaded separately)
+data/bronze/prices/*.ndjson
+data/bronze/prices/*.backup
+data/sp500/**/*.csv
+data/sp500/**/*.parquet
+data/news/**/*.csv
+data/news/**/*.json
+data/news/**/*.ndjson
+*.ndjson
+*.backup
+
+# Model files
+models/*.pkl
+models/*.joblib
+models/*.h5
+models/*.pt
+
+# Logs
+*.log
+logs/
+tmp/
+/tmp/
+
+# Documentation (keep only README)
+docs/
+outputs/*.csv
+
+# Environment files (should be configured separately)
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude settings
+.claude/
+
+# Temporary files
+*.tmp
+*.temp

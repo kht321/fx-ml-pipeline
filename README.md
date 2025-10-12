@@ -44,7 +44,11 @@ A production-ready ML pipeline for predicting S&P 500 movements using:
 
 ## Quick Start
 
-### 1. Setup Environment
+Choose between **Local Setup** (Python virtual environment) or **Docker** (containerized environment).
+
+### Option A: Local Setup
+
+#### 1. Setup Environment
 
 ```bash
 # Clone repository
@@ -58,7 +62,7 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
-### 2. Configure API Credentials
+#### 2. Configure API Credentials
 
 ```bash
 # Create .env file
@@ -71,7 +75,7 @@ echo "OANDA_ACCOUNT_ID=your_account_id" >> .env
 
 Get free OANDA credentials at: https://developer.oanda.com/
 
-### 3. Download S&P 500 Data
+#### 3. Download S&P 500 Data
 
 ```bash
 # Download 5 years of 1-minute S&P 500 data
@@ -83,7 +87,7 @@ python src/download_sp500_historical.py --years 5 --granularity M1
 
 **Expected output**: `data/bronze/prices/spx500_usd_m1_5years.ndjson` (353 MB, ~1.7M candles)
 
-### 4. Run Market Pipeline
+#### 4. Run Market Pipeline
 
 ```bash
 # Process market data: Bronze → Silver → Gold
@@ -92,7 +96,7 @@ python run_sp500_pipeline.py --skip-labels
 # Output: 37 training-ready features in data/sp500/gold/
 ```
 
-### 5. Collect News Data (Optional)
+#### 5. Collect News Data (Optional)
 
 ```bash
 # Option A: Free RSS feeds (no API keys required)
@@ -107,12 +111,87 @@ python src/build_news_features.py
 python src/build_news_gold.py
 ```
 
-### 6. Train Models
+#### 6. Train Models
 
 ```bash
 # Train XGBoost models on combined features
 python src/train_combined_model.py
 ```
+
+### Option B: Docker Setup 🐳
+
+**Recommended for**: Easy setup, reproducible environments, team collaboration
+
+#### 1. Prerequisites
+
+- Docker Desktop (Mac/Windows) or Docker Engine (Linux)
+- Get from: https://www.docker.com/products/docker-desktop
+
+#### 2. Quick Start with Docker
+
+```bash
+# Clone repository
+git clone https://github.com/[your-username]/fx-ml-pipeline.git
+cd fx-ml-pipeline
+
+# Configure credentials
+cp .env.example .env
+nano .env  # Add your OANDA_TOKEN and OANDA_ACCOUNT_ID
+
+# Build Docker images
+docker-compose build
+
+# Download data (runs in container)
+docker-compose run --rm downloader
+
+# Process data
+docker-compose run --rm pipeline
+
+# Collect and process news
+docker-compose run --rm news-scraper
+docker-compose run --rm news-processor
+
+# Train models
+docker-compose run --rm trainer
+```
+
+#### 3. Docker Services Available
+
+| Service | Command | Purpose |
+|---------|---------|---------|
+| **dev** | `docker-compose run --rm dev` | Interactive development shell |
+| **jupyter** | `docker-compose up -d jupyter` | JupyterLab (port 8888) |
+| **downloader** | `docker-compose run --rm downloader` | Download S&P 500 data |
+| **pipeline** | `docker-compose run --rm pipeline` | Run market pipeline |
+| **news-scraper** | `docker-compose run --rm news-scraper` | Scrape news articles |
+| **news-processor** | `docker-compose run --rm news-processor` | Process news data |
+| **trainer** | `docker-compose run --rm trainer` | Train ML models |
+| **api** | `docker-compose up -d api` | Model serving API (port 8000) |
+
+#### 4. Docker Examples
+
+```bash
+# Interactive development
+docker-compose run --rm dev /bin/bash
+# Inside container, you have full access to the codebase
+
+# Start Jupyter Lab
+docker-compose up -d jupyter
+# Access at: http://localhost:8888
+
+# Run complete workflow
+docker-compose run --rm downloader && \
+docker-compose run --rm pipeline && \
+docker-compose run --rm trainer
+
+# View logs
+docker-compose logs -f pipeline
+
+# Stop all services
+docker-compose down
+```
+
+**Full Docker documentation**: See [DOCKER_GUIDE.md](DOCKER_GUIDE.md) for comprehensive guide.
 
 ---
 
@@ -541,6 +620,11 @@ OANDA is a registered trademark. This project uses the OANDA v20 API under their
 ## Changelog
 
 ### 2025-10-13
+- ✅ Added Docker support (Dockerfile, docker-compose.yml, .dockerignore)
+- ✅ Created comprehensive Docker guide (DOCKER_GUIDE.md)
+- ✅ Multi-stage Docker builds (dev, production, jupyter, api)
+- ✅ Docker services for all pipeline components
+- ✅ Updated README with Docker quick start instructions
 - ✅ Completed news pipeline test run (27 articles → 519 signals)
 - ✅ Repository cleanup (removed old forex files)
 - ✅ Consolidated documentation into comprehensive README
