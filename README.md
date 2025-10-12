@@ -130,6 +130,23 @@ For questions or issues:
 2. Review code examples in [src/](src/)
 3. Contact project team
 
+# TODO
+
+- Dockerize the source code
+- Create [Excel file](https://smu.sharepoint.com/:x:/r/teams/CS611MLEGroup7/Shared%20Documents/Project/working_excel.xlsx?d=w77f8ee1d13754645863078bbb7329dca&csf=1&web=1&e=2RIgfN) to have clear input / output for each data pipeline layers (Bronze -> Silver -> Gold -> Gold_Transform -> ... model training ) 
+  
+
+## Individual Module  
+- Model Training / Evaluation
+- Airflow (controller & scheduler)
+- Monitoring
+- Model Registry
+- Feast Online / Offline store
+- Application (UI)
+
+
+
+
 ---
 
 **Last Updated**: 2025-10-09
