@@ -6,6 +6,7 @@ Open .env, change the following two directories:
 ```bash
 HOST_DATA_DIR=<Your_working_directory>/fx-ml-pipeline/airflow_mlops/data
 HOST_MODELS_DIR=<Your_working_directory>/fx-ml-pipeline/airflow_mlops/models
+HOST_REPORTS_DIR=<Your_working_directory>/fx-ml-pipeline/airflow_mlops/reports
 ```
 
 # Docker setup
@@ -78,4 +79,19 @@ Test load-balancing upstream:
 curl -s -H "Content-Type: application/json" \
   -d '{"feat_mean": 2.5}' \
   http://localhost:8088/predict
+```
+
+# Setup Evidently
+
+```bash
+docker compose build evidently-monitor
+docker compose up -d evidently-monitor
+docker compose logs -f evidently-monitor
+curl -s http://localhost:8050/ping
+# generate now:
+curl -s -X POST http://localhost:8050/generate
+# open HTML:
+open http://localhost:8050/
+# the file is also saved on host:
+ls -l ./reports/latest_report.html
 ```
