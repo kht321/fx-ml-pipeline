@@ -8,9 +8,20 @@ financial sentiment analysis specifically tuned for SGD trading signals.
 import logging
 import re
 import torch
+import json
+import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from pathlib import Path
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+    nlp = spacy.load("en_core_web_sm")  # Load spaCy model for preprocessing
+except ImportError:
+    SPACY_AVAILABLE = False
+    logging.warning("spaCy not available. Install with: pip install spacy && python -m spacy download en_core_web_sm")
 
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
@@ -31,6 +42,8 @@ class FinGPTAnalysis:
     key_factors: List[str]  # Main drivers extracted
     market_coherence: str  # "aligned", "divergent", "neutral" - news vs market state
     signal_strength_adjusted: float  # Sentiment adjusted for market context
+    topic: str = "general"  # Added for tabular features
+    urgency: str = "low"  # Added for tabular features
     raw_response: str  # Full model output for debugging
 
 
@@ -108,8 +121,28 @@ class FinGPTProcessor:
             logging.error(f"Failed to load FinGPT model: {e}")
             raise
 
+    def preprocess_text(self, text: str) -> str:
+        """Clean article text using spaCy and normalize formatting (lowercase, punctuation)."""
+        if not SPACY_AVAILABLE:
+            raise ImportError("spaCy required for preprocessing. Install with: pip install spacy && python -m spacy download en_core_web_sm")
+        
+        doc = nlp(text)
+        # Clean: remove stop words, lemmatize, keep alpha tokens
+        cleaned = " ".join([token.lemma_.lower() for token in doc if not token.is_stop and token.is_alpha])
+        # Normalize: remove punctuation, extra spaces, lowercase
+        cleaned = re.sub(r'[^\w\s]', '', cleaned).strip().lower()
+        return cleaned
+
+    def save_cleaned_text(self, cleaned_text: str, output_path: str = "data/silver/cleaned_text.json"):
+        """Save cleaned text as intermediate output."""
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, 'w') as f:
+            json.dump({"cleaned_text": cleaned_text}, f)
+        logging.info(f"Cleaned text saved to {output_path}")
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def analyze_sgd_news(self, news_text: str, headline: str = "", market_context: Dict = None) -> FinGPTAnalysis:
-        """Analyze financial news for SGD trading signals using FinGPT with market context.
+        """Analyze financial news for SGD trading signals using FinGPT with market context, including preprocessing and storage.
 
         Parameters
         ----------
@@ -125,8 +158,12 @@ class FinGPTProcessor:
         FinGPTAnalysis
             Structured analysis results with market-aware insights
         """
-        # Construct market-aware prompt for SGD analysis
-        prompt = self._build_market_aware_prompt(news_text, headline, market_context)
+        # Text Preprocessing: Clean and normalize
+        cleaned_text = self.preprocess_text(news_text)
+        self.save_cleaned_text(cleaned_text)
+
+        # LLM Feature Extraction: Design prompt (using FinGPT, not OpenAI, as per your code), call on cleaned text
+        prompt = self._build_market_aware_prompt(cleaned_text, headline, market_context)
 
         try:
             # Generate analysis using FinGPT
@@ -144,13 +181,16 @@ class FinGPTProcessor:
             # Extract the model's response (after the prompt)
             model_response = raw_output[len(prompt):].strip()
 
-            # Parse the structured response
+            # Parse into tabular features (sentiment, topic, urgency, etc.)
             analysis = self._parse_response(model_response)
+
+            # Store enriched output in /data/silver/
+            self._store_enriched_output(analysis)
 
             return analysis
 
         except Exception as e:
-            logging.error(f"FinGPT analysis failed: {e}")
+            logging.error(f"FinGPT analysis failed after retries: {e}")
             # Return neutral analysis on failure
             return FinGPTAnalysis(
                 sentiment_score=0.0,
@@ -161,11 +201,13 @@ class FinGPTProcessor:
                 key_factors=[],
                 market_coherence="neutral",
                 signal_strength_adjusted=0.0,
+                topic="general",
+                urgency="low",
                 raw_response=f"Error: {str(e)}"
             )
 
     def _build_market_aware_prompt(self, news_text: str, headline: str = "", market_context: Dict = None) -> str:
-        """Build a market-aware prompt for SGD trading signal analysis."""
+        """Build a market-aware prompt for SGD trading signal analysis, including topic and urgency extraction."""
 
         context = f"Headline: {headline}\n" if headline else ""
         context += f"Article: {news_text}"
@@ -204,6 +246,8 @@ POLICY: [hawkish/dovish/neutral]
 TIMEFRAME: [immediate/short_term/medium_term]
 MARKET_COHERENCE: [aligned/divergent/neutral]
 ADJUSTED_STRENGTH: [0.0-1.0]
+TOPIC: [general/economy/policy/trade/etc.]  # Added for tabular features
+URGENCY: [low/medium/high]  # Added for tabular features
 FACTORS: [key market drivers, separated by semicolons]
 
 Analysis:"""
@@ -216,7 +260,7 @@ Analysis:"""
         return self._build_market_aware_prompt(news_text, headline, None)
 
     def _parse_response(self, response: str) -> FinGPTAnalysis:
-        """Parse the structured FinGPT response into analysis object."""
+        """Parse the structured FinGPT response into analysis object, including topic and urgency."""
 
         # Default values
         sentiment_score = 0.0
@@ -227,6 +271,8 @@ Analysis:"""
         key_factors = []
         market_coherence = "neutral"
         signal_strength_adjusted = 0.0
+        topic = "general"
+        urgency = "low"
 
         try:
             # Extract structured fields using regex
@@ -266,6 +312,15 @@ Analysis:"""
                 # Fallback: use absolute sentiment as adjusted strength
                 signal_strength_adjusted = abs(sentiment_score)
 
+            # Added for tabular features
+            topic_match = re.search(r'TOPIC:\s*(\w+)', response, re.IGNORECASE)
+            if topic_match:
+                topic = topic_match.group(1).lower()
+
+            urgency_match = re.search(r'URGENCY:\s*(\w+)', response, re.IGNORECASE)
+            if urgency_match:
+                urgency = urgency_match.group(1).lower()
+
             factors_match = re.search(r'FACTORS:\s*(.+)', response, re.IGNORECASE)
             if factors_match:
                 factors_text = factors_match.group(1).strip()
@@ -283,8 +338,17 @@ Analysis:"""
             key_factors=key_factors,
             market_coherence=market_coherence,
             signal_strength_adjusted=signal_strength_adjusted,
+            topic=topic,
+            urgency=urgency,
             raw_response=response
         )
+
+    def _store_enriched_output(self, analysis: FinGPTAnalysis, output_path: str = "data/silver/enriched_features.parquet"):
+        """Store enriched output in tabular format (Parquet) in /data/silver/."""
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        df = pd.DataFrame([analysis.__dict__])
+        df.to_parquet(output_path, index=False)
+        logging.info(f"Enriched features stored to {output_path}")
 
     def _sentiment_to_score(self, sentiment: str) -> float:
         """Convert sentiment text to numeric score."""
@@ -345,6 +409,8 @@ class LexiconFallback:
             key_factors=list(words & (cls.POSITIVE_WORDS | cls.NEGATIVE_WORDS)),
             market_coherence="neutral",  # No market analysis in fallback
             signal_strength_adjusted=abs(sentiment_score),
+            topic="general",
+            urgency="low",
             raw_response="Lexicon-based fallback analysis"
         )
 
