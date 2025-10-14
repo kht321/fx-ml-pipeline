@@ -3,7 +3,7 @@ import pendulum
 import os
 from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
-from docker.types import Mount  # 👈 use real Mount objects
+from docker.types import Mount  # use real Mount objects
 
 default_args = {"retries": 1, "retry_delay": timedelta(seconds=10)}
 
