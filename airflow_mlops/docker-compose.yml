@@ -105,6 +105,18 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 
+  evidently-monitor:
+    build: ./docker/evidently
+    image: evidently-monitor:0.6.7
+    depends_on: [model-blue, model-green]   # optional
+    ports: ["8050:8050"]
+    environment:
+      DATA_DIR: /opt/airflow/data
+      REPORTS_DIR: /opt/airflow/reports
+    volumes:
+      - ./data:/opt/airflow/data
+      - ./reports:/opt/airflow/reports
+
   # Task images (for DockerOperator)
   etl-image:
     build: ./docker/etl
