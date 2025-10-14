@@ -199,6 +199,31 @@ services:
       start_period: 40s
 
   # ============================================================================
+  # Streamlit Dashboard (Visualization & Monitoring)
+  # ============================================================================
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: streamlit
+    container_name: sp500-dashboard
+    image: sp500-pipeline:streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./outputs:/app/outputs
+      - ./.env:/app/.env
+      - ./src/ui_streamlit.py:/app/ui_streamlit.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - sp500-network
+    restart: unless-stopped
+    command: streamlit run src/ui_streamlit.py --server.port 8501 --server.address 0.0.0.0
+
+  # ============================================================================
   # Redis (Feature Store - Online Serving)
   # ============================================================================
   redis:

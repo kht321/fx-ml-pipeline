@@ -34,7 +34,7 @@ COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # ============================================================================
 # Stage 3: Development Image (with dev tools)
@@ -70,7 +70,7 @@ RUN mkdir -p \
     models
 
 # Expose ports
-EXPOSE 8888 8000 5000
+EXPOSE 8888 8000 5000 8501
 
 # Set default command
 CMD ["/bin/bash"]
@@ -152,3 +152,18 @@ USER mluser
 EXPOSE 8000
 
 CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+# ============================================================================
+# Stage 7: Streamlit App Image (for UI)
+# ============================================================================
+FROM production as streamlit
+RUN pip install \
+    streamlit \
+    plotly \
+    oandapyV20
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "src/ui_streamlit.py", "--server.port=8501", "--server.address=http://localhost"]
+# ============================================================================
