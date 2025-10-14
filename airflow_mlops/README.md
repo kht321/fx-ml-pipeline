@@ -1,5 +1,13 @@
 # Airflow MLOps
 
+# Environment setup
+
+Open .env, change the following two directories:
+```bash
+HOST_DATA_DIR=<Your_working_directory>/fx-ml-pipeline/airflow_mlops/data
+HOST_MODELS_DIR=<Your_working_directory>/fx-ml-pipeline/airflow_mlops/models
+```
+
 # Docker setup
  - Step 1: Up airflow-init to init airflow and create admin user
 ```bash
