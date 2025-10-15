@@ -2,6 +2,7 @@
 python-dotenv>=1.0.0
 requests>=2.31.0
 pyyaml>=6.0
+tenacity>=8.0.0  # Added for retry logic in Silver Layer
 
 # Data Processing
 pandas>=2.0.0
@@ -30,6 +31,7 @@ redis>=5.0.0
 torch>=2.0.0
 transformers>=4.30.0
 peft>=0.5.0
+spacy>=3.7.0  # Added for text preprocessing in Silver Layer
 
 # Development Tools (optional)
 # jupyter>=1.0.0
