@@ -1,0 +1,77 @@
+==============================================
+REPOSITORY CLEANUP - SUMMARY
+Date: October 16, 2025
+==============================================
+
+COMPLETED TASKS:
+✅ Moved all MD documentation files to docs/
+✅ Updated .gitignore to exclude docs/ folder entirely
+✅ Created simple, concise README.md
+✅ Pulled remote changes (merged airflow_mlops/)
+✅ Resolved merge conflicts
+✅ Committed changes to git
+
+DOCUMENTATION MOVED TO docs/:
+- DOCKER_GUIDE.md
+- IMPLEMENTATION_COMPLETE.md
+- RESTRUCTURING_GUIDE.md
+- RESTRUCTURING_SUMMARY.md
+- QUICK_REFERENCE.md
+- CLEANUP_GUIDE.md
+
+.GITIGNORE UPDATES:
+- Changed from: docs/*.md
+- Changed to: docs/
+- Effect: Entire docs/ folder now excluded from git
+
+README.md:
+- Simplified to ~160 lines (from ~650 lines)
+- Focused on quick start and key information
+- Removed redundant sections
+- Clear component status table
+
+GIT STATUS:
+- Remote changes pulled successfully
+- New airflow_mlops/ directory added
+- Merge conflicts resolved
+- Local changes committed
+
+PENDING ACTIONS (Your Choice):
+==================================
+
+1. DELETE TEST FILES (Safe):
+   rm test_*.py
+   rm diagnose_fingpt.py inspect_sp500_data.py
+   rm generate_feature_inventory_with_files.py
+   rm convert_ndjson_to_json_files.py
+
+2. ARCHIVE OLD SRC (After verification):
+   mkdir -p archive/old_src_$(date +%Y%m%d)
+   mv src/ archive/old_src_$(date +%Y%m%d)/
+
+3. DOWNLOAD NEWS DATA:
+   # See next section for commands
+
+OLD CODE ANALYSIS:
+==================
+- src/ has 25 Python files
+- ALL functionality migrated to src_clean/
+- EXCEPTION: src/oanda_api.py still used (keep temporarily)
+- Test files (9) are safe to delete
+- Old utility scripts can be deleted
+
+REMOTE REPO:
+============
+- URL: https://github.com/kht321/fx-ml-pipeline
+- Branch: main
+- Status: Up to date with origin/main
+- New remote content: airflow_mlops/ directory
+
+NEXT STEPS:
+===========
+1. Run migration: python migrate_to_clean_structure.py --execute
+2. Test pipeline: python src_clean/run_full_pipeline.py --skip-news
+3. Delete test files (see commands above)
+4. Archive old src/ (after verification)
+5. Download historical news data
+6. Push to remote: git push origin main
