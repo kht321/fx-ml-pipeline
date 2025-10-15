@@ -77,12 +77,12 @@ class MarketGoldBuilder:
         # Start with technical features
         merged = tech_df.copy()
 
-        # Get non-overlapping columns from microstructure
-        micro_cols = ['time'] + [c for c in micro_df.columns if c not in tech_df.columns or c == 'time']
+        # Get non-overlapping columns from microstructure (exclude time from list to avoid duplicates)
+        micro_cols = ['time'] + [c for c in micro_df.columns if c not in tech_df.columns and c != 'time']
         merged = merged.merge(micro_df[micro_cols], on='time', how='inner', suffixes=('', '_micro'))
 
-        # Get non-overlapping columns from volatility
-        vol_cols = ['time'] + [c for c in vol_df.columns if c not in merged.columns or c == 'time']
+        # Get non-overlapping columns from volatility (exclude time from list to avoid duplicates)
+        vol_cols = ['time'] + [c for c in vol_df.columns if c not in merged.columns and c != 'time']
         merged = merged.merge(vol_df[vol_cols], on='time', how='inner', suffixes=('', '_vol'))
 
         logger.info(f"Merged result: {len(merged)} rows, {len(merged.columns)} columns")
