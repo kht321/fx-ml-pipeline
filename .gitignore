@@ -1,5 +1,5 @@
 .env
-docs/*.md
+docs/
 .venv*/
 __pycache__/
 *.pyc
@@ -16,6 +16,16 @@ data/bronze/prices/*.ndjson
 data/bronze/prices/*.backup
 data/silver/**/*.parquet
 data/gold/**/*.parquet
+data/sp500/
+data/news/bronze/simulated/
+data/news/gold/
+data/news/silver/
+
+# Output files
+outputs/
+*.csv
+*.pkl
+*.joblib
 
 # OS files
 .DS_Store
