@@ -21,6 +21,14 @@ data/news/bronze/simulated/
 data/news/gold/
 data/news/silver/
 
+# New clean data structure (exclude large files)
+data_clean/bronze/market/*.ndjson
+data_clean/silver/**/*.csv
+data_clean/gold/**/*.csv
+data_clean/gold/**/*.parquet
+data_clean/models/*.pkl
+data_clean/training_outputs/
+
 # Output files
 outputs/
 *.csv
