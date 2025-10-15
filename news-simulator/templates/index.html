@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📰 News Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📰 News Simulator</h1>
+            <p class="subtitle">Stream positive, negative, or neutral news to the Bronze pipeline</p>
+        </header>
+
+        <div class="stats-panel">
+            <div class="stat-item">
+                <div class="stat-label">Available Articles</div>
+                <div class="stat-value" id="total-articles">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Streamed</div>
+                <div class="stat-value" id="streamed-count">0</div>
+            </div>
+        </div>
+
+        <div class="breakdown">
+            <div class="breakdown-item">
+                <span class="badge badge-positive">Positive</span>
+                <span id="positive-count">0</span>
+            </div>
+            <div class="breakdown-item">
+                <span class="badge badge-negative">Negative</span>
+                <span id="negative-count">0</span>
+            </div>
+            <div class="breakdown-item">
+                <span class="badge badge-neutral">Neutral</span>
+                <span id="neutral-count">0</span>
+            </div>
+        </div>
+
+        <div class="button-panel">
+            <button class="btn btn-positive" onclick="streamNews('positive')">
+                <span class="emoji">🟢</span>
+                <span class="btn-text">Stream Positive News</span>
+            </button>
+
+            <button class="btn btn-negative" onclick="streamNews('negative')">
+                <span class="emoji">🔴</span>
+                <span class="btn-text">Stream Negative News</span>
+            </button>
+
+            <button class="btn btn-neutral" onclick="streamNews('neutral')">
+                <span class="emoji">⚪</span>
+                <span class="btn-text">Stream Neutral News</span>
+            </button>
+        </div>
+
+        <div class="last-article" id="last-article" style="display: none;">
+            <h3>Last Streamed Article</h3>
+            <div class="article-content">
+                <div class="article-time" id="article-time"></div>
+                <div class="article-headline" id="article-headline"></div>
+                <div class="article-meta">
+                    <span class="badge" id="article-sentiment-badge"></span>
+                    <span id="article-sentiment-score"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <div class="status-indicator" id="status-indicator">
+                <span class="status-dot"></span>
+                <span id="status-text">Ready</span>
+            </div>
+            <button class="btn-reload" onclick="reloadArticles()">
+                🔄 Reload Articles
+            </button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
