@@ -9,7 +9,7 @@ services:
   # ============================================================================
 
   postgres:
-    image: postgres:15
+    image: postgres:15.9-alpine
     container_name: ml-postgres
     environment:
       POSTGRES_USER: mlops
@@ -28,7 +28,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: ml-redis
     ports:
       - "6379:6379"
@@ -47,11 +47,11 @@ services:
   # ============================================================================
 
   mlflow:
-    image: python:3.9-slim
+    image: python:3.11.13-slim
     container_name: ml-mlflow
     working_dir: /mlflow
     command: >
-      sh -c "pip install mlflow psycopg2-binary boto3 &&
+      sh -c "pip install --no-cache-dir mlflow==2.20.5 psycopg2-binary==2.9.10 boto3==1.36.0 &&
              mlflow server
              --backend-store-uri postgresql://mlops:mlops_password@postgres:5432/mlops
              --default-artifact-root /mlflow/artifacts
@@ -75,11 +75,11 @@ services:
   # ============================================================================
 
   feast:
-    image: python:3.9-slim
+    image: python:3.11.13-slim
     container_name: ml-feast
     working_dir: /feast
     command: >
-      sh -c "pip install feast[redis] &&
+      sh -c "pip install --no-cache-dir 'feast[redis]==0.55.0' &&
              feast -c /feast/feature_repo serve
              --host 0.0.0.0
              --port 6566"
@@ -101,7 +101,7 @@ services:
   # ============================================================================
 
   airflow-postgres:
-    image: postgres:15
+    image: postgres:15.9-alpine
     container_name: ml-airflow-postgres
     environment:
       POSTGRES_USER: airflow
@@ -118,7 +118,7 @@ services:
       retries: 5
 
   airflow-init:
-    image: apache/airflow:2.7.0-python3.9
+    image: apache/airflow:2.10.6-python3.11
     container_name: ml-airflow-init
     depends_on:
       airflow-postgres:
@@ -140,7 +140,7 @@ services:
     command: version
 
   airflow-webserver:
-    image: apache/airflow:2.7.0-python3.9
+    image: apache/airflow:2.10.6-python3.11
     container_name: ml-airflow-webserver
     depends_on:
       airflow-postgres:
@@ -164,7 +164,7 @@ services:
     command: webserver
 
   airflow-scheduler:
-    image: apache/airflow:2.7.0-python3.9
+    image: apache/airflow:2.10.6-python3.11
     container_name: ml-airflow-scheduler
     depends_on:
       airflow-postgres:
@@ -263,7 +263,7 @@ services:
   # ============================================================================
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.29.2-alpine
     container_name: ml-nginx
     ports:
       - "8088:80"
