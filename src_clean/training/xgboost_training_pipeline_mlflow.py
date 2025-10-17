@@ -7,6 +7,19 @@ Enhanced version with:
 - Model registry integration
 - Better model versioning
 
+Target Variable:
+- Classification: Predicts direction (Up=1, Down=0)
+- Regression: Predicts percentage returns (not absolute price difference)
+
+Why percentage returns?
+- Prevents naive persistence (model learning yt = yt-1)
+- Stationary target variable
+- Scale-independent (works across different price levels)
+- Directly interpretable for trading (% gain/loss)
+
+To convert regression predictions back to price:
+    predicted_price = current_price * (1 + predicted_return)
+
 Repository Location: fx-ml-pipeline/src_clean/training/xgboost_training_pipeline_mlflow.py
 """
 
@@ -152,9 +165,13 @@ class XGBoostMLflowTrainingPipeline:
         df['future_close'] = df['close'].shift(-self.prediction_horizon)
 
         if self.task == "classification":
+            # Classification: predict direction (up/down)
             df['target'] = (df['future_close'] > df['close']).astype(int)
         else:
-            df['target'] = df['future_close'] - df['close']
+            # Regression: predict percentage returns (not absolute price difference)
+            # This prevents the model from learning naive persistence (yt = yt-1)
+            df['target'] = (df['future_close'] - df['close']) / df['close']
+            logger.info(f"Predicting percentage returns (stationary target)")
 
         df = df.dropna(subset=['target'])
 
@@ -163,6 +180,8 @@ class XGBoostMLflowTrainingPipeline:
         if self.task == "classification":
             value_counts = df['target'].value_counts()
             logger.info(f"Label distribution: Up={value_counts.get(1, 0)}, Down={value_counts.get(0, 0)}")
+        else:
+            logger.info(f"Target stats: mean={df['target'].mean():.6f}, std={df['target'].std():.6f}")
 
         return df
 
