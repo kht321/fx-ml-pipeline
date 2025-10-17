@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-10-18T04:25:52.415828",
+  "prediction": "DOWN",
+  "confidence": 0.9097981452941895,
+  "probabilities": {
+    "UP": 0.09020185470581055,
+    "DOWN": 0.9097981452941895
+  },
+  "trigger": "new_news_article",
+  "signal_strength": "Strong",
+  "features_calculated": 70,
+  "news_available": 1,
+  "news_sentiment": 0.3105263157894737,
+  "news_article": {
+    "headline": "Dollar claws back losses from U.S. government shutdown, turns slightly higher",
+    "source": "cnbc_markets",
+    "published_at": "2025-10-01T18:34:41+00:00",
+    "sentiment_score": -0.75,
+    "sentiment_type": "negative",
+    "content": "N/A"
+  }
+}

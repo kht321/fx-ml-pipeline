@@ -38,6 +38,7 @@ OANDA_ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
 OANDA_TOKEN = os.getenv("OANDA_TOKEN")
 MODEL_DIR = Path("data_clean/models")
 GOLD_DIR = Path("data_clean/gold")
+PREDICTIONS_FILE = Path("data_clean/predictions/latest_prediction.json")
 
 
 @st.cache_resource
@@ -144,8 +145,36 @@ def calculate_technical_features(df):
     return df
 
 
+def load_latest_prediction():
+    """Load the latest prediction from event-driven predictor."""
+    try:
+        if not PREDICTIONS_FILE.exists():
+            return None
+
+        with open(PREDICTIONS_FILE, 'r') as f:
+            pred_data = json.load(f)
+
+        # Convert to display format
+        return {
+            'prediction': pred_data['prediction'],
+            'confidence': pred_data['confidence'],
+            'prob_up': pred_data['probabilities']['UP'],
+            'prob_down': pred_data['probabilities']['DOWN'],
+            'timestamp': pred_data['timestamp'],
+            'trigger': pred_data.get('trigger', 'unknown'),
+            'features_used': pred_data.get('features_calculated', 0)
+        }
+    except Exception as e:
+        st.error(f"Error loading prediction: {e}")
+        return None
+
+
 def make_prediction(model, features, feature_names, latest_data):
-    """Make a prediction using the loaded model."""
+    """
+    DEPRECATED: Manual prediction function using random features.
+    Use load_latest_prediction() for event-driven predictions instead.
+    This function is kept for backward compatibility only.
+    """
     try:
         # Prepare feature vector (simplified - would need full feature calculation)
         # For now, use mock features matching training
@@ -325,37 +354,117 @@ def main():
                 st.dataframe(df.tail(10))
 
     with tab2:
-        st.header("🎯 ML Predictions")
+        st.header("🎯 Event-Driven ML Predictions")
 
-        # Make prediction
-        if st.button("🔮 Generate Prediction", type="primary"):
-            with st.spinner("Generating prediction..."):
-                pred_result = make_prediction(model, feature_names, feature_names, df)
+        # Add refresh button and auto-refresh toggle
+        col_refresh, col_auto = st.columns([1, 3])
+        with col_refresh:
+            if st.button("🔄 Refresh Now", use_container_width=True):
+                st.rerun()
+        with col_auto:
+            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=False)
 
-                if pred_result:
-                    col1, col2 = st.columns(2)
+        st.markdown("---")
 
-                    with col1:
-                        display_prediction_gauge(pred_result)
+        # Load latest prediction from event-driven system
+        pred_result = load_latest_prediction()
 
-                    with col2:
-                        st.subheader("Prediction Details")
-                        st.metric("Direction", pred_result['prediction'],
-                                 delta="Bullish" if pred_result['prediction'] == 'UP' else "Bearish")
-                        st.metric("Confidence", f"{pred_result['confidence']:.1%}")
-                        st.metric("Probability UP", f"{pred_result['prob_up']:.1%}")
-                        st.metric("Probability DOWN", f"{pred_result['prob_down']:.1%}")
+        if pred_result:
+            # Display prediction timestamp and trigger info
+            col_time, col_trigger, col_features = st.columns(3)
+            with col_time:
+                pred_time = datetime.fromisoformat(pred_result['timestamp'])
+                time_ago = datetime.now() - pred_time
+                st.metric("Last Prediction", pred_time.strftime("%H:%M:%S"),
+                         delta=f"{int(time_ago.total_seconds())}s ago")
+            with col_trigger:
+                st.metric("Triggered By", pred_result['trigger'].replace('_', ' ').title())
+            with col_features:
+                st.metric("Features Calculated", pred_result['features_used'])
 
-                        # Recommendation
-                        if pred_result['confidence'] > 0.7:
-                            st.success(f"🟢 Strong signal: {pred_result['prediction']}")
-                        elif pred_result['confidence'] > 0.6:
-                            st.info(f"🟡 Moderate signal: {pred_result['prediction']}")
-                        else:
-                            st.warning("⚪ Weak signal - trade with caution")
+            st.markdown("---")
+
+            # Display prediction
+            col1, col2 = st.columns(2)
+
+            with col1:
+                display_prediction_gauge(pred_result)
+
+            with col2:
+                st.subheader("Prediction Details")
+                st.metric("Direction", pred_result['prediction'],
+                         delta="Bullish" if pred_result['prediction'] == 'UP' else "Bearish")
+                st.metric("Confidence", f"{pred_result['confidence']:.1%}")
+                st.metric("Probability UP", f"{pred_result['prob_up']:.1%}")
+                st.metric("Probability DOWN", f"{pred_result['prob_down']:.1%}")
+
+                # Recommendation
+                if pred_result['confidence'] > 0.7:
+                    st.success(f"🟢 Strong signal: {pred_result['prediction']}")
+                elif pred_result['confidence'] > 0.6:
+                    st.info(f"🟡 Moderate signal: {pred_result['prediction']}")
+                else:
+                    st.warning("⚪ Weak signal - trade with caution")
+
+            st.markdown("---")
+
+            # Display news article that triggered prediction
+            if 'news_article' in pred_result and pred_result['news_article']:
+                st.subheader("📰 News Article That Triggered This Prediction")
+                news = pred_result['news_article']
+
+                # Sentiment badge
+                sentiment_type = news.get('sentiment_type', 'neutral')
+                sentiment_score = news.get('sentiment_score', 0)
+
+                if sentiment_type == 'positive':
+                    sentiment_color = "🟢"
+                    sentiment_badge = f"🟢 Positive ({sentiment_score:.2f})"
+                elif sentiment_type == 'negative':
+                    sentiment_color = "🔴"
+                    sentiment_badge = f"🔴 Negative ({sentiment_score:.2f})"
+                else:
+                    sentiment_color = "⚪"
+                    sentiment_badge = f"⚪ Neutral ({sentiment_score:.2f})"
+
+                # Display news in a nice card
+                st.markdown(f"### {sentiment_color} {news.get('headline', 'N/A')}")
+
+                col_source, col_time = st.columns(2)
+                with col_source:
+                    st.markdown(f"**Source:** {news.get('source', 'N/A').replace('_', ' ').title()}")
+                with col_time:
+                    st.markdown(f"**Published:** {news.get('published_at', 'N/A')[:10]}")
+
+                st.markdown(f"**Sentiment:** {sentiment_badge}")
+
+                # Show content in expander
+                if news.get('content') and news.get('content') != 'N/A':
+                    with st.expander("📖 Read Full Article"):
+                        st.markdown(news['content'])
+
+                st.markdown("---")
+
+            # Event-driven status
+            st.success("✅ **Event-Driven Mode Active**: Predictions automatically generated when new news arrives")
+            st.info("💡 **How it works**: The realtime predictor monitors the news directory and triggers predictions using real market features (RSI, MACD, Bollinger Bands, etc.) combined with news sentiment")
+
+        else:
+            st.warning("⚠️ No predictions available yet")
+            st.info("""
+            **To generate predictions:**
+            1. Start the realtime predictor: `python src_clean/ui/realtime_predictor.py`
+            2. Simulate news articles: `curl -X POST http://localhost:5001/api/stream/positive`
+            3. Predictions will appear here automatically
+            """)
 
         st.markdown("---")
         st.info("💡 **Note**: Predictions are for educational purposes. Always do your own research.")
+
+        # Auto-refresh logic for predictions tab
+        if auto_refresh_predictions:
+            time.sleep(5)
+            st.rerun()
 
     with tab3:
         st.header("📊 Model Performance Metrics")
