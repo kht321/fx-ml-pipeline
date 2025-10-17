@@ -25,20 +25,32 @@ from joblib import load
 
 # Try to import OANDA (optional - fallback to mock data)
 try:
-    from oanda_api import API
+    import oandapyV20
     import oandapyV20.endpoints.pricing as pricing
     import oandapyV20.endpoints.instruments as instruments
+    from dotenv import load_dotenv
+    load_dotenv()
     OANDA_AVAILABLE = True
 except ImportError:
     OANDA_AVAILABLE = False
-    st.warning("OANDA API not available - using mock data")
 
 # Configuration
 OANDA_ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
 OANDA_TOKEN = os.getenv("OANDA_TOKEN")
+OANDA_ENV = os.getenv("OANDA_ENV", "practice")
 MODEL_DIR = Path("data_clean/models")
 GOLD_DIR = Path("data_clean/gold")
 PREDICTIONS_FILE = Path("data_clean/predictions/latest_prediction.json")
+
+# Initialize OANDA API if available
+if OANDA_AVAILABLE and OANDA_TOKEN:
+    OANDA_API = oandapyV20.API(access_token=OANDA_TOKEN, environment=OANDA_ENV)
+else:
+    OANDA_API = None
+    if not OANDA_AVAILABLE:
+        st.sidebar.warning("⚠️ OANDA not available - using mock data for charts")
+    elif not OANDA_TOKEN:
+        st.sidebar.warning("⚠️ OANDA_TOKEN not configured - using mock data for charts")
 
 
 @st.cache_resource
@@ -72,14 +84,14 @@ def load_latest_model():
 
 def get_latest_price(account_id, instrument="SPX500_USD"):
     """Get latest price from OANDA."""
-    if not OANDA_AVAILABLE or not account_id:
+    if not OANDA_API or not account_id:
         # Mock data
         return 4521.50 + np.random.randn() * 10
 
     try:
         params = {"instruments": instrument}
         request = pricing.PricingInfo(accountID=account_id, params=params)
-        response = API.request(request)
+        response = OANDA_API.request(request)
         prices = response['prices'][0]
         bid = float(prices['bids'][0]['price'])
         ask = float(prices['asks'][0]['price'])
@@ -91,7 +103,7 @@ def get_latest_price(account_id, instrument="SPX500_USD"):
 
 def get_candles(instrument="SPX500_USD", granularity="H1", count=100):
     """Get historical candles from OANDA."""
-    if not OANDA_AVAILABLE:
+    if not OANDA_API:
         # Generate mock candles
         dates = pd.date_range(end=datetime.now(), periods=count, freq='H')
         base_price = 4500
@@ -113,9 +125,14 @@ def get_candles(instrument="SPX500_USD", granularity="H1", count=100):
             "price": "M"
         }
         request = instruments.InstrumentsCandles(instrument=instrument, params=params)
-        response = API.request(request)
+        response = OANDA_API.request(request)
         time.sleep(0.5)
         candles = response.get("candles", [])
+
+        if not candles:
+            # Fallback to mock data
+            st.warning("No candles received from OANDA, using mock data")
+            return get_candles(instrument, granularity, count)
 
         df = pd.DataFrame([
             {
@@ -131,7 +148,18 @@ def get_candles(instrument="SPX500_USD", granularity="H1", count=100):
         return df
     except Exception as e:
         st.error(f"Error fetching candles: {e}")
-        return None
+        # Fallback to mock data on error
+        dates = pd.date_range(end=datetime.now(), periods=count, freq='H')
+        base_price = 4500
+        prices = base_price + np.cumsum(np.random.randn(count) * 10)
+        return pd.DataFrame({
+            'time': dates,
+            'open': prices + np.random.randn(count) * 2,
+            'high': prices + abs(np.random.randn(count) * 5),
+            'low': prices - abs(np.random.randn(count) * 5),
+            'close': prices,
+            'volume': np.random.randint(10000, 100000, count)
+        })
 
 
 def calculate_technical_features(df):
