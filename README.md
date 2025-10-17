@@ -320,11 +320,7 @@ fx-ml-pipeline/
 
 ## 🎓 Learning Resources
 
-- [Complete Demo Guide](docs/COMPLETE_DEMO_GUIDE.md) - Step-by-step walkthrough
-- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Production deployment
-- [MLflow Docs](https://mlflow.org/docs/latest/)
-- [Airflow Docs](https://airflow.apache.org/docs/)
-- [Streamlit Docs](https://docs.streamlit.io/)
+
 
 ## 🐛 Troubleshooting
 
