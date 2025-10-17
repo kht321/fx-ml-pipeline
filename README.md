@@ -8,29 +8,88 @@ End-to-end machine learning pipeline for S&P 500 price prediction using technica
 
 ## 🚀 Quick Demo (5 minutes)
 
+### Prerequisites
+- Python 3.11
+- OANDA practice account (get free API credentials at https://www.oanda.com/us-en/trading/api/)
+
+### Setup
 ```bash
-# 1. Setup Python 3.11 environment
+# 1. Clone and setup environment
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Start MLflow tracking (use port 5002 to avoid macOS AirPlay conflict)
-mlflow ui --backend-store-uri file:./mlruns --port 5002 --host 0.0.0.0 &
+# 2. Configure OANDA credentials in .env
+cat > .env << EOF
+OANDA_TOKEN=your_token_here
+OANDA_ACCOUNT_ID=your_account_id_here
+OANDA_ENV=practice
+EOF
+```
 
-# 3. Train model
+### Run the Demo
+```bash
+# Terminal 1: Start News Simulator (port 5001)
+cd news-simulator
+python app.py
+# Keep running - generates test news articles
+
+# Terminal 2: Start MLflow Tracking (port 5002, avoids macOS AirPlay conflict)
+cd ..
+source .venv/bin/activate
+mlflow ui --backend-store-uri file:./mlruns --port 5002 --host 0.0.0.0
+# Access: http://localhost:5002
+
+# Terminal 3: Train Model (one-time setup)
+source .venv/bin/activate
 python src_clean/training/xgboost_training_pipeline_mlflow.py \
   --market-features data_clean/gold/market/features/spx500_features.csv \
   --news-signals data_clean/gold/news/signals/sp500_trading_signals.csv \
   --prediction-horizon 30 \
   --mlflow-uri http://localhost:5002
+# Wait for training to complete (~2-3 minutes)
 
-# 4. Launch dashboard
-streamlit run src_clean/ui/streamlit_dashboard.py &
+# Terminal 4: Start Event-Driven Predictor
+source .venv/bin/activate
+python src_clean/ui/realtime_predictor.py
+# Keep running - auto-generates predictions when news arrives
+# Uses OANDA API for real-time S&P 500 futures data (24/5 trading)
 
-# 5. Access services
-# - Streamlit Dashboard: http://localhost:8501
-# - MLflow UI: http://localhost:5002
+# Terminal 5: Launch Streamlit Dashboard (port 8501)
+source .venv/bin/activate
+streamlit run src_clean/ui/streamlit_dashboard.py
+# Access: http://localhost:8501
+
+# Terminal 6: Trigger Predictions
+# Simulate positive news
+curl -X POST http://localhost:5001/api/stream/positive
+
+# Simulate negative news
+curl -X POST http://localhost:5001/api/stream/negative
+
+# Watch Terminal 4 - you'll see:
+# "INFO - Fetched 200 candles from OANDA for SPX500_USD"
+# "INFO - Prediction: UP/DOWN (confidence: XX.XX%)"
+
+# Refresh Streamlit dashboard (Tab 2) to see:
+# - Latest prediction with confidence
+# - News headline that triggered it
+# - All 70 features calculated from real OANDA data
+# - Sentiment analysis of the news
 ```
+
+### What You'll See
+1. **MLflow UI** (http://localhost:5002): Track experiments, view metrics, compare models
+2. **Streamlit Dashboard** (http://localhost:8501):
+   - **Tab 1**: Live S&P 500 price charts with candlesticks
+   - **Tab 2**: Event-driven predictions with news headlines
+   - **Tab 3**: Model performance metrics (AUC, accuracy, confusion matrix)
+   - **Tab 4**: Feature importance analysis (top 20 features)
+3. **Real-time Predictions**: Automatically triggered when news arrives, using:
+   - ✅ Live OANDA S&P 500 futures data (SPX500_USD)
+   - ✅ 70 calculated features (64 market + 6 news)
+   - ✅ News sentiment analysis
+   - ✅ XGBoost model inference
 
 ## 📚 Complete System Demo
 
@@ -60,16 +119,43 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 
 ### Data Layer
 - **Bronze**: OANDA market data (1.7M 1-min candles) + RSS news feeds
-- **Silver**: 48 engineered features (37 market + 11 news sentiment)
+- **Silver**: Engineered features (market + news sentiment)
 - **Gold**: Training-ready dataset with labels
 
-### ML Model
+### Feature Engineering (70 Features)
+**Market Features (64):**
+- Price: OHLC, returns, log returns
+- Technical Indicators: RSI, MACD, Bollinger Bands, Stochastic
+- Moving Averages: SMA (5/10/20/50), EMA (5/10/20/50)
+- Momentum: ADX, ATR, ROC, rate of change
+- Volatility: Historical vol (20/50 periods), Garman-Klass, Parkinson, Rogers-Satchell, Yang-Zhang estimators
+- Volume: MA, ratio, z-score, velocity, acceleration
+- Range: TR, ATR ratios, high-low spread
+- Microstructure: Price impact, order flow imbalance, illiquidity metrics
+- Advanced: VWAP, close/VWAP ratio, spread proxies
+
+**News Features (6):**
+- Average sentiment score
+- Signal strength
+- Article count (recent)
+- Quality score
+- News age
+- Availability flag
+
+### ML Models
 - **Classification**: XGBoost binary classifier (Up/Down direction)
   - Performance: AUC 0.6349, Accuracy 58.85%
 - **Regression**: XGBoost regressor (Percentage returns)
   - Performance: RMSE 0.15%, MAE 0.09%
   - Note: Predicts returns (not absolute price) to avoid naive persistence
 - **Tracking**: MLflow experiment tracking & model registry
+
+### Real-Time Prediction System
+- **Event-Driven Architecture**: Automatically triggers predictions when news arrives
+- **Live Market Data**: OANDA S&P 500 futures (SPX500_USD) - 24/5 trading
+- **File System Watcher**: Monitors news directory using watchdog library
+- **Feature Calculation**: Real-time computation of all 70 features from OANDA API
+- **News Integration**: Displays triggering article headline, source, sentiment in dashboard
 
 ### Services
 
