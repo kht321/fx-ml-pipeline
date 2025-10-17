@@ -14,22 +14,22 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Start MLflow tracking
-mlflow server --host 0.0.0.0 --port 5000 &
+# 2. Start MLflow tracking (use port 5002 to avoid macOS AirPlay conflict)
+mlflow ui --backend-store-uri file:./mlruns --port 5002 --host 0.0.0.0 &
 
 # 3. Train model
 python src_clean/training/xgboost_training_pipeline_mlflow.py \
   --market-features data_clean/gold/market/features/spx500_features.csv \
   --news-signals data_clean/gold/news/signals/sp500_trading_signals.csv \
   --prediction-horizon 30 \
-  --mlflow-uri http://localhost:5000
+  --mlflow-uri http://localhost:5002
 
 # 4. Launch dashboard
 streamlit run src_clean/ui/streamlit_dashboard.py &
 
 # 5. Access services
 # - Streamlit Dashboard: http://localhost:8501
-# - MLflow UI: http://localhost:5000
+# - MLflow UI: http://localhost:5002
 ```
 
 ## 📚 Complete System Demo
@@ -64,9 +64,11 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 - **Gold**: Training-ready dataset with labels
 
 ### ML Model
-- **Algorithm**: XGBoost Classifier
-- **Task**: 30-minute price direction prediction (UP/DOWN)
-- **Performance**: AUC 0.635, Accuracy 58.85%
+- **Classification**: XGBoost binary classifier (Up/Down direction)
+  - Performance: AUC 0.6349, Accuracy 58.85%
+- **Regression**: XGBoost regressor (Percentage returns)
+  - Performance: RMSE 0.15%, MAE 0.09%
+  - Note: Predicts returns (not absolute price) to avoid naive persistence
 - **Tracking**: MLflow experiment tracking & model registry
 
 ### Services
@@ -75,10 +77,12 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 |---------|------|-------------|--------|
 | **Streamlit** | 8501 | Interactive ML dashboard | http://localhost:8501 |
 | **FastAPI** | 8000 | REST API + WebSocket | http://localhost:8000/docs |
-| **MLflow** | 5000 | Experiment tracking | http://localhost:5000 |
-| **Airflow** | 8080 | Workflow orchestration | admin/admin |
+| **MLflow** | 5002 | Experiment tracking | http://localhost:5002 |
+| **Airflow** | 8080 | Workflow orchestration (Airflow 2.10.3) | http://localhost:8080 (admin/admin) |
 | **Evidently** | 8050 | Model monitoring | http://localhost:8050 |
 | **News Simulator** | 5001 | Test data generator | http://localhost:5001 |
+
+**Note**: MLflow uses port 5002 (not 5000) to avoid conflict with macOS AirPlay Receiver.
 
 ## 🔄 Demo Workflows
 
@@ -87,13 +91,14 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 # Start news simulator
 cd news-simulator && python app.py &
 
-# Generate 100 test articles
-curl -X POST http://localhost:5001/api/generate \
-  -d '{"count": 100, "topic": "sp500"}' \
-  -H "Content-Type: application/json"
+# Stream 100 test articles (40 positive, 30 neutral, 30 negative)
+for i in {1..40}; do curl -X POST http://localhost:5001/api/stream/positive; done
+for i in {1..30}; do curl -X POST http://localhost:5001/api/stream/neutral; done
+for i in {1..30}; do curl -X POST http://localhost:5001/api/stream/negative; done
 
-# Process to bronze layer
-cp news-simulator/generated/*.json data_clean/bronze/news/raw_articles/
+# Articles automatically saved to data/news/bronze/simulated/
+# Copy to processing directory
+cp data/news/bronze/simulated/*.json data_clean/bronze/news/raw_articles/
 
 # Run sentiment analysis (Silver layer)
 python src_clean/data_pipelines/silver/news_sentiment_processor.py \
@@ -110,7 +115,7 @@ python src_clean/training/xgboost_training_pipeline_mlflow.py \
   --prediction-horizon 30 \
   --experiment-name demo_experiment
 
-# View results: http://localhost:5000
+# View results: http://localhost:5002
 ```
 
 ### 3. Inference Demo
@@ -129,11 +134,12 @@ wscat -c ws://localhost:8000/ws/market-stream
 
 ### 4. Orchestration Demo
 ```bash
-# Start Airflow
+# Start Airflow (version 2.10.3)
 cd airflow_mlops
-docker-compose up -d airflow-webserver airflow-scheduler
+docker compose up -d postgres-airflow airflow-web airflow-scheduler
 
-# Access: http://localhost:8080 (admin/admin)
+# Access: http://localhost:8080
+# Login: admin / admin
 # Trigger DAGs:
 #   - data_pipeline (Bronze → Silver → Gold)
 #   - train_deploy_pipeline (Train & deploy model)
@@ -155,10 +161,10 @@ curl -X POST http://localhost:8050/generate
 ```bash
 # Launch all services
 cd docker
-docker-compose -f docker-compose.full-stack.yml up -d
+docker compose -f docker-compose.full-stack.yml up -d
 
 # Verify all services healthy
-docker-compose -f docker-compose.full-stack.yml ps
+docker compose -f docker-compose.full-stack.yml ps
 
 # Access all UIs (see Services table above)
 ```
@@ -257,14 +263,20 @@ lsof -i :8000  # or any port
 kill -9 <PID>
 ```
 
+**macOS Port 5000 Conflict**: On macOS, AirPlay Receiver uses port 5000. This project uses **port 5002 for MLflow** to avoid conflicts.
+
+To disable AirPlay Receiver (optional):
+1. Open System Settings → General → AirDrop & Handoff
+2. Turn off "AirPlay Receiver"
+
 ### Docker Issues
 ```bash
 # Restart containers
 cd docker
-docker-compose -f docker-compose.full-stack.yml restart
+docker compose -f docker-compose.full-stack.yml restart
 
 # View logs
-docker-compose -f docker-compose.full-stack.yml logs -f <service>
+docker compose -f docker-compose.full-stack.yml logs -f <service>
 ```
 
 ## 📝 License
