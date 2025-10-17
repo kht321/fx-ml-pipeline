@@ -59,3 +59,5 @@ outputs/
 postgres_data/
 redis_data/
 airflow_logs/
+data_clean/*.zip
+*.zip
