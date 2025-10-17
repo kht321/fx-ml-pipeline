@@ -1,156 +1,278 @@
 # S&P 500 ML Prediction Pipeline
 
-Machine learning pipeline for S&P 500 price prediction using technical indicators and news sentiment.
+End-to-end machine learning pipeline for S&P 500 price prediction using technical indicators and news sentiment.
 
-## Quick Start
+## 🎯 Status
+
+✅ **Production Ready** - Full pipeline operational with Python 3.11
+
+## 🚀 Quick Demo (5 minutes)
 
 ```bash
-# 1. Setup environment
-python -m venv .venv
+# 1. Setup Python 3.11 environment
+python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -r requirements.txt
 
-# 2. Migrate to clean structure
-python migrate_to_clean_structure.py --execute
+# 2. Start MLflow tracking
+mlflow server --host 0.0.0.0 --port 5000 &
 
-# 3. Run full pipeline
-python src_clean/run_full_pipeline.py \
-  --bronze-market data_clean/bronze/market/spx500_usd_m1_5years.ndjson \
-  --skip-news \
-  --prediction-horizon 30
+# 3. Train model
+python src_clean/training/xgboost_training_pipeline_mlflow.py \
+  --market-features data_clean/gold/market/features/spx500_features.csv \
+  --news-signals data_clean/gold/news/signals/sp500_trading_signals.csv \
+  --prediction-horizon 30 \
+  --mlflow-uri http://localhost:5000
+
+# 4. Launch dashboard
+streamlit run src_clean/ui/streamlit_dashboard.py &
+
+# 5. Access services
+# - Streamlit Dashboard: http://localhost:8501
+# - MLflow UI: http://localhost:5000
 ```
 
-## Architecture
+## 📚 Complete System Demo
+
+**For comprehensive walkthrough**, see **[Complete Demo Guide](docs/COMPLETE_DEMO_GUIDE.md)**
+
+30-minute demo includes:
+- ✅ Data ingestion (Market + News simulator)
+- ✅ Feature engineering (Bronze → Silver → Gold)
+- ✅ Model training with MLflow tracking
+- ✅ Interactive Streamlit dashboard
+- ✅ Airflow workflow orchestration
+- ✅ Evidently AI model monitoring
+- ✅ FastAPI REST API + WebSocket
+- ✅ Full stack Docker deployment
+
+## 🏗️ Architecture
 
 **Medallion Data Pipeline**:
 ```
-Bronze (Raw)  →  Silver (Features)  →  Gold (Training)  →  Models
+News Simulator → Bronze → Silver → Gold → Model → Inference → Monitoring
+      ↓            ↓        ↓        ↓      ↓        ↓           ↓
+   5001 port    Raw    Features  Training  API   Dashboard   Evidently
+              Storage  Engineering         8000    8501        8050
 ```
 
-- **Bronze**: Raw OHLCV candles + news articles
-- **Silver**: Technical indicators (37 features)
-- **Gold**: Training-ready features + labels
-- **Models**: XGBoost classifier/regressor
+## 🎨 Components
 
-## Components
+### Data Layer
+- **Bronze**: OANDA market data (1.7M 1-min candles) + RSS news feeds
+- **Silver**: 48 engineered features (37 market + 11 news sentiment)
+- **Gold**: Training-ready dataset with labels
 
-### Data Pipeline (`src_clean/data_pipelines/`)
+### ML Model
+- **Algorithm**: XGBoost Classifier
+- **Task**: 30-minute price direction prediction (UP/DOWN)
+- **Performance**: AUC 0.635, Accuracy 58.85%
+- **Tracking**: MLflow experiment tracking & model registry
 
-**Bronze Layer** - Data Collection:
-- `bronze/market_data_downloader.py` - OANDA market data
-- `bronze/news_data_collector.py` - RSS news feeds
+### Services
 
-**Silver Layer** - Feature Engineering:
-- `silver/market_technical_processor.py` - RSI, MACD, Bollinger Bands
-- `silver/market_microstructure_processor.py` - Volume, spread, order flow
-- `silver/market_volatility_processor.py` - GK, Parkinson, RS, YZ estimators
-- `silver/news_sentiment_processor.py` - Sentiment analysis
+| Service | Port | Description | Access |
+|---------|------|-------------|--------|
+| **Streamlit** | 8501 | Interactive ML dashboard | http://localhost:8501 |
+| **FastAPI** | 8000 | REST API + WebSocket | http://localhost:8000/docs |
+| **MLflow** | 5000 | Experiment tracking | http://localhost:5000 |
+| **Airflow** | 8080 | Workflow orchestration | admin/admin |
+| **Evidently** | 8050 | Model monitoring | http://localhost:8050 |
+| **News Simulator** | 5001 | Test data generator | http://localhost:5001 |
 
-**Gold Layer** - Training Data:
-- `gold/market_gold_builder.py` - Merge all market features
-- `gold/label_generator.py` - Generate prediction labels
+## 🔄 Demo Workflows
 
-### Training (`src_clean/training/`)
+### 1. Data Ingestion Demo
+```bash
+# Start news simulator
+cd news-simulator && python app.py &
 
-- `xgboost_training_pipeline.py` - XGBoost model training with CV
+# Generate 100 test articles
+curl -X POST http://localhost:5001/api/generate \
+  -d '{"count": 100, "topic": "sp500"}' \
+  -H "Content-Type: application/json"
 
-### Orchestration
+# Process to bronze layer
+cp news-simulator/generated/*.json data_clean/bronze/news/raw_articles/
 
-- `src_clean/run_full_pipeline.py` - End-to-end automation
+# Run sentiment analysis (Silver layer)
+python src_clean/data_pipelines/silver/news_sentiment_processor.py \
+  --input data_clean/bronze/news/raw_articles/ \
+  --output data_clean/silver/news/sentiment/
+```
 
-## Implementation Status
+### 2. Training Demo
+```bash
+# Train with MLflow tracking
+python src_clean/training/xgboost_training_pipeline_mlflow.py \
+  --market-features data_clean/gold/market/features/spx500_features.csv \
+  --news-signals data_clean/gold/news/signals/sp500_trading_signals.csv \
+  --prediction-horizon 30 \
+  --experiment-name demo_experiment
 
-| Component | Status |
-|-----------|--------|
-| Data structure (Bronze/Silver/Gold) | ✅ Complete |
-| Market data collection | ✅ Complete |
-| News data collection | ✅ Complete (RSS only) |
-| Technical features (17) | ✅ Complete |
-| Microstructure features (10) | ✅ Complete |
-| Volatility features (10) | ✅ Complete |
-| Sentiment features | ✅ Complete |
-| Gold layer builder | ✅ Complete |
-| Label generator (30min prediction) | ✅ Complete |
-| XGBoost training pipeline | ✅ Complete |
-| Full pipeline orchestrator | ✅ Complete |
-| Historical news data (5 years) | ⚠️ In Progress |
+# View results: http://localhost:5000
+```
 
-## Data
+### 3. Inference Demo
+```bash
+# Start FastAPI
+uvicorn src_clean.api.main:app --host 0.0.0.0 --port 8000 &
 
-### Market Data
-- **Source**: OANDA SPX500_USD CFD
-- **Coverage**: 5 years (2020-2025)
-- **Records**: 1.7M candles
-- **Resolution**: 1-minute
+# Generate prediction
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"instrument": "SPX500_USD"}'
 
-### News Data
-- **Current**: 27 articles (12 days)
-- **Required**: ~9,000 articles (5 years)
-- **Status**: Daily collection ongoing
+# Stream real-time updates (requires wscat)
+wscat -c ws://localhost:8000/ws/market-stream
+```
 
-## Features
+### 4. Orchestration Demo
+```bash
+# Start Airflow
+cd airflow_mlops
+docker-compose up -d airflow-webserver airflow-scheduler
+
+# Access: http://localhost:8080 (admin/admin)
+# Trigger DAGs:
+#   - data_pipeline (Bronze → Silver → Gold)
+#   - train_deploy_pipeline (Train & deploy model)
+#   - batch_inference (Generate predictions)
+```
+
+### 5. Monitoring Demo
+```bash
+# Start Evidently
+docker-compose up -d evidently-monitor
+
+# Generate drift report
+curl -X POST http://localhost:8050/generate
+
+# View: http://localhost:8050/latest_report.html
+```
+
+### 6. Full Stack Demo
+```bash
+# Launch all services
+cd docker
+docker-compose -f docker-compose.full-stack.yml up -d
+
+# Verify all services healthy
+docker-compose -f docker-compose.full-stack.yml ps
+
+# Access all UIs (see Services table above)
+```
+
+## 📊 Features
 
 **Market Features (37)**:
 - Technical: RSI, MACD, Bollinger Bands, Moving Averages, ATR, ADX
 - Microstructure: Volume patterns, spread proxies, order flow
-- Volatility: GK, Parkinson, Rogers-Satchell, Yang-Zhang
+- Volatility: Garman-Klass, Parkinson, Rogers-Satchell, Yang-Zhang
 
 **News Features (11)**:
-- Sentiment scores, polarity, confidence
-- Policy tone (hawkish/dovish)
-- Financial sentiment
+- Sentiment scores (positive/negative/neutral)
+- Trading signal strength
+- Article quality metrics
+- Policy tone indicators
 
-## Prediction Target
+## 📁 Project Structure
 
-**30-minute price prediction**:
-- Classification: Price up (1) or down (0)
-- Regression: Actual price change
+```
+fx-ml-pipeline/
+├── README.md                    # This file
+├── requirements.txt             # Python 3.11 dependencies
+│
+├── src_clean/                   # Production code
+│   ├── api/                     # FastAPI backend
+│   ├── ui/                      # Streamlit dashboards
+│   ├── data_pipelines/          # Bronze → Silver → Gold
+│   │   ├── bronze/              # Data collection
+│   │   ├── silver/              # Feature engineering
+│   │   └── gold/                # Training data prep
+│   ├── training/                # XGBoost training
+│   │   ├── xgboost_training_pipeline.py
+│   │   └── xgboost_training_pipeline_mlflow.py
+│   └── utils/                   # Shared utilities
+│
+├── docker/                      # Docker configurations
+│   ├── Dockerfile.fastapi
+│   ├── Dockerfile.streamlit
+│   ├── docker-compose.yml
+│   └── docker-compose.full-stack.yml
+│
+├── docs/                        # Documentation (local only)
+│   ├── COMPLETE_DEMO_GUIDE.md   # Full system demo
+│   ├── DEPLOYMENT_GUIDE.md      # Deployment instructions
+│   └── IMPLEMENTATION_SUMMARY.md
+│
+├── data_clean/                  # Medallion data architecture
+│   ├── bronze/                  # Raw data
+│   ├── silver/                  # Engineered features
+│   ├── gold/                    # Training-ready data
+│   └── models/                  # Trained XGBoost models
+│
+├── feature_repo/                # Feast feature store config
+├── airflow_mlops/               # Airflow DAGs & config
+├── news-simulator/              # News article generator
+└── archive/                     # Archived code & data
+```
 
-## Key Scripts
+## 🔧 Requirements
 
+- **Python**: 3.11+ (required)
+- **Docker**: For full stack deployment
+- **RAM**: 16GB minimum
+- **Disk**: 50GB free space
+- **OANDA Account**: Free demo account available
+
+## 🎓 Learning Resources
+
+- [Complete Demo Guide](docs/COMPLETE_DEMO_GUIDE.md) - Step-by-step walkthrough
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Production deployment
+- [MLflow Docs](https://mlflow.org/docs/latest/)
+- [Airflow Docs](https://airflow.apache.org/docs/)
+- [Streamlit Docs](https://docs.streamlit.io/)
+
+## 🐛 Troubleshooting
+
+### Python Version
 ```bash
-# Analyze data quality
-python analyze_data_coverage.py
+# Verify Python 3.11
+python --version  # Should show 3.11.x
 
-# Process individual layers
-python src_clean/data_pipelines/silver/market_technical_processor.py --input ... --output ...
-python src_clean/data_pipelines/gold/market_gold_builder.py --technical ... --output ...
-python src_clean/data_pipelines/gold/label_generator.py --input ... --output ... --horizon 30
-
-# Train model
-python src_clean/training/xgboost_training_pipeline.py \
-  --market-features data_clean/gold/market/features/spx500_features.csv \
-  --prediction-horizon 30 \
-  --task classification
+# Recreate venv if needed
+rm -rf .venv
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## Directory Structure
-
-```
-├── src_clean/           # Clean organized codebase
-│   ├── data_pipelines/  # Bronze → Silver → Gold
-│   └── training/        # Model training
-├── data_clean/          # Medallion data structure
-│   ├── bronze/          # Raw data
-│   ├── silver/          # Engineered features
-│   ├── gold/            # Training data
-│   └── models/          # Trained models
-├── docs/                # Documentation (local only)
-└── feature_repo/        # Feast feature store
-```
-
-## Configuration
-
-Required environment variables in `.env`:
+### Port Conflicts
 ```bash
-OANDA_TOKEN=your_token_here
-OANDA_ACCOUNT_ID=your_account_id
+# Find process
+lsof -i :8000  # or any port
+
+# Kill process
+kill -9 <PID>
 ```
 
-## License
+### Docker Issues
+```bash
+# Restart containers
+cd docker
+docker-compose -f docker-compose.full-stack.yml restart
 
-For educational and research purposes.
+# View logs
+docker-compose -f docker-compose.full-stack.yml logs -f <service>
+```
+
+## 📝 License
+
+Educational and research purposes only.
 
 ---
 
-**Status**: ✅ Pipeline Ready | ⚠️ Collecting News Data
+**Version**: 2.0.0
+**Python**: 3.11+
+**Last Updated**: October 2025
