@@ -1,0 +1,11 @@
+{
+  "headline": "Federal Reserve raises concerns about inflation",
+  "published_at": "2025-10-13T23:39:14.523248",
+  "source": "MockNewsAPI",
+  "sentiment_score": -0.6273375114972379,
+  "url": "https://mock-news.com/article-1108",
+  "body": "Federal Reserve raises concerns about inflation. Market analysis continues to develop.",
+  "mock": true,
+  "streamed_at": "2025-10-13T23:39:14.523273",
+  "sentiment_type": "negative"
+}

@@ -220,9 +220,11 @@ def stream_news(sentiment_type: str):
     if not available_articles:
         logger.warning(f"No {sentiment_type} articles available, creating mock article")
         article = create_mock_article(sentiment_type)
+        logger.info(f"Created mock {sentiment_type} article: {article['headline']}")
     else:
-        # Pick random article
-        article = random.choice(available_articles)
+        # Pick random article and make a copy to avoid modifying the original
+        article = random.choice(available_articles).copy()
+        logger.info(f"Selected existing {sentiment_type} article: {article.get('headline', 'No headline')}")
 
     # Add streaming metadata
     article['streamed_at'] = datetime.now().isoformat()
@@ -283,6 +285,6 @@ load_news_articles()
 if __name__ == '__main__':
     app.run(
         host='0.0.0.0',
-        port=5000,
+        port=5001,
         debug=True
     )

@@ -1,0 +1,295 @@
+version: '3.8'
+
+# Full-Stack ML Pipeline Docker Compose
+# Services: Airflow, MLflow, Feast, FastAPI, Streamlit, Evidently, PostgreSQL, Redis
+
+services:
+  # ============================================================================
+  # DATABASES & CACHING
+  # ============================================================================
+
+  postgres:
+    image: postgres:15.9-alpine
+    container_name: ml-postgres
+    environment:
+      POSTGRES_USER: mlops
+      POSTGRES_PASSWORD: mlops_password
+      POSTGRES_DB: mlops
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ml-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ml-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ml-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # MLFLOW - Experiment Tracking & Model Registry
+  # ============================================================================
+
+  mlflow:
+    image: python:3.11.13-slim
+    container_name: ml-mlflow
+    working_dir: /mlflow
+    command: >
+      sh -c "pip install --no-cache-dir mlflow==2.20.5 psycopg2-binary==2.9.10 boto3==1.36.0 &&
+             mlflow server
+             --backend-store-uri postgresql://mlops:mlops_password@postgres:5432/mlops
+             --default-artifact-root /mlflow/artifacts
+             --host 0.0.0.0
+             --port 5000"
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+      - ./data_clean/models:/models
+    networks:
+      - ml-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - MLFLOW_TRACKING_URI=http://localhost:5000
+
+  # ============================================================================
+  # FEAST - Feature Store
+  # ============================================================================
+
+  feast:
+    image: python:3.11.13-slim
+    container_name: ml-feast
+    working_dir: /feast
+    command: >
+      sh -c "pip install --no-cache-dir 'feast[redis]==0.55.0' &&
+             feast -c /feast/feature_repo serve
+             --host 0.0.0.0
+             --port 6566"
+    ports:
+      - "6566:6566"
+    volumes:
+      - ./feature_repo:/feast/feature_repo
+      - ./data_clean/gold:/feast/data
+    networks:
+      - ml-network
+    depends_on:
+      - redis
+    environment:
+      - FEAST_REDIS_HOST=redis
+      - FEAST_REDIS_PORT=6379
+
+  # ============================================================================
+  # AIRFLOW - Workflow Orchestration
+  # ============================================================================
+
+  airflow-postgres:
+    image: postgres:15.9-alpine
+    container_name: ml-airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    networks:
+      - ml-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    image: apache/airflow:2.10.6-python3.11
+    container_name: ml-airflow-init
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs=
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ./airflow_mlops/dags:/opt/airflow/dags
+      - ./src_clean:/opt/airflow/src_clean
+      - ./data_clean:/opt/airflow/data_clean
+    networks:
+      - ml-network
+    command: version
+
+  airflow-webserver:
+    image: apache/airflow:2.10.6-python3.11
+    container_name: ml-airflow-webserver
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs=
+      - AIRFLOW__WEBSERVER__SECRET_KEY=secret
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow_mlops/dags:/opt/airflow/dags
+      - ./src_clean:/opt/airflow/src_clean
+      - ./data_clean:/opt/airflow/data_clean
+      - airflow_logs:/opt/airflow/logs
+    networks:
+      - ml-network
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.6-python3.11
+    container_name: ml-airflow-scheduler
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs=
+    volumes:
+      - ./airflow_mlops/dags:/opt/airflow/dags
+      - ./src_clean:/opt/airflow/src_clean
+      - ./data_clean:/opt/airflow/data_clean
+      - airflow_logs:/opt/airflow/logs
+    networks:
+      - ml-network
+    command: scheduler
+
+  # ============================================================================
+  # FASTAPI - Backend API
+  # ============================================================================
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: ml-fastapi
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./data_clean/models:/app/models
+      - ./feature_repo:/app/feature_repo
+    networks:
+      - ml-network
+    depends_on:
+      - redis
+      - mlflow
+    environment:
+      - OANDA_ACCOUNT_ID=${OANDA_ACCOUNT_ID}
+      - OANDA_TOKEN=${OANDA_TOKEN}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - FEAST_REDIS_HOST=redis
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ============================================================================
+  # STREAMLIT - Frontend Dashboard
+  # ============================================================================
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: ml-streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./src:/app/src
+      - ./data_clean:/app/data_clean
+    networks:
+      - ml-network
+    depends_on:
+      - fastapi
+    environment:
+      - OANDA_ACCOUNT_ID=${OANDA_ACCOUNT_ID}
+      - OANDA_TOKEN=${OANDA_TOKEN}
+      - FASTAPI_URL=http://fastapi:8000
+    command: streamlit run src/streamlit_dashboard.py --server.port 8501 --server.address 0.0.0.0
+
+  # ============================================================================
+  # EVIDENTLY - Model Monitoring
+  # ============================================================================
+
+  evidently:
+    build:
+      context: ./airflow_mlops/docker/evidently
+      dockerfile: Dockerfile
+    container_name: ml-evidently
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./data_clean/gold:/data/gold
+      - ./data_clean/models:/models
+      - evidently_reports:/reports
+    networks:
+      - ml-network
+    environment:
+      - REFERENCE_DATA=/data/gold/market/features/spx500_features.csv
+      - CURRENT_DATA=/data/gold/monitoring/current_features.csv
+
+  # ============================================================================
+  # NGINX - Load Balancer (for model serving)
+  # ============================================================================
+
+  nginx:
+    image: nginx:1.29.2-alpine
+    container_name: ml-nginx
+    ports:
+      - "8088:80"
+    volumes:
+      - ./airflow_mlops/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - ml-network
+    depends_on:
+      - fastapi
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+
+volumes:
+  postgres_data:
+  redis_data:
+  mlflow_artifacts:
+  airflow_postgres_data:
+  airflow_logs:
+  evidently_reports:
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  ml-network:
+    driver: bridge

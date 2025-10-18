@@ -77,3 +77,4 @@ coverage*.xml
 data/*
 pgdata/*
 models/*
+reports/*
