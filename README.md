@@ -443,11 +443,6 @@ fx-ml-pipeline/
 │   ├── docker-compose.yml
 │   └── docker-compose.full-stack.yml
 │
-├── docs/                        # Documentation (local only)
-│   ├── COMPLETE_DEMO_GUIDE.md   # Full system demo
-│   ├── DEPLOYMENT_GUIDE.md      # Deployment instructions
-│   └── IMPLEMENTATION_SUMMARY.md
-│
 ├── data_clean/                  # Medallion data architecture
 │   ├── bronze/                  # Raw data
 │   ├── silver/                  # Engineered features
