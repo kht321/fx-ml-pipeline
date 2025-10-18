@@ -1,0 +1,305 @@
+"""Model inference engine with Feast integration."""
+
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional, List
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+class ModelInference:
+    """Handles ML model inference with feature fetching."""
+
+    def __init__(
+        self,
+        model_path: str = "models/gradient_boosting_combined_model.pkl",
+        feast_repo: str = "feature_repo"
+    ):
+        """Initialize inference engine.
+
+        Args:
+            model_path: Path to trained model pickle file
+            feast_repo: Path to Feast feature repository
+        """
+        self.model_path = Path(model_path)
+        self.feast_repo = Path(feast_repo)
+        self.model = None
+        self.scaler = None
+        self.feature_names = None
+        self.model_type = None
+        self.feast_store = None
+        self.is_loaded = False
+
+        self._load_model()
+        self._init_feast()
+
+    def _load_model(self):
+        """Load the trained ML model."""
+        try:
+            from joblib import load
+
+            if not self.model_path.exists():
+                logger.warning(f"Model not found at {self.model_path}")
+                # Try alternative paths
+                alternative_paths = [
+                    Path("models/xgboost_combined_model.pkl"),
+                    Path("models/random_forest_combined_model.pkl"),
+                    Path("data/combined/models/gradient_boosting_combined_model.pkl"),
+                ]
+
+                for alt_path in alternative_paths:
+                    if alt_path.exists():
+                        self.model_path = alt_path
+                        logger.info(f"Using alternative model: {alt_path}")
+                        break
+
+            if self.model_path.exists():
+                model_bundle = load(self.model_path)
+                self.model = model_bundle.get('model')
+                self.scaler = model_bundle.get('scaler')
+                self.feature_names = model_bundle.get('feature_names', [])
+                self.model_type = model_bundle.get('model_type', 'unknown')
+                self.is_loaded = True
+                logger.info(f"Loaded {self.model_type} model with {len(self.feature_names)} features")
+            else:
+                logger.warning("No model found - predictions will be mock")
+                self.is_loaded = False
+
+        except Exception as e:
+            logger.error(f"Error loading model: {e}")
+            self.is_loaded = False
+
+    def _init_feast(self):
+        """Initialize Feast feature store connection."""
+        try:
+            from feast import FeatureStore
+
+            if self.feast_repo.exists():
+                self.feast_store = FeatureStore(repo_path=str(self.feast_repo))
+                logger.info("Feast feature store initialized")
+            else:
+                logger.warning(f"Feast repo not found at {self.feast_repo}")
+
+        except ImportError:
+            logger.warning("Feast not installed - will use fallback feature fetching")
+        except Exception as e:
+            logger.error(f"Error initializing Feast: {e}")
+
+    def get_online_features(self, instrument: str) -> Optional[Dict]:
+        """Fetch online features from Feast.
+
+        Args:
+            instrument: Trading instrument (e.g., SPX500_USD)
+
+        Returns:
+            Dictionary of features or None if unavailable
+        """
+        if not self.feast_store:
+            return None
+
+        try:
+            entity_rows = [{"instrument": instrument}]
+
+            # Fetch both market and news features
+            features_to_fetch = [
+                "market_gold_features:ret_1h",
+                "market_gold_features:ret_4h",
+                "market_gold_features:vol_1d",
+                "market_gold_features:rsi_14",
+                "market_gold_features:orderbook_imbalance",
+                "news_gold_signals:news_sentiment_score",
+                "news_gold_signals:news_signal_strength",
+            ]
+
+            online_features = self.feast_store.get_online_features(
+                features=features_to_fetch,
+                entity_rows=entity_rows
+            ).to_dict()
+
+            return online_features
+
+        except Exception as e:
+            logger.warning(f"Could not fetch Feast features: {e}")
+            return None
+
+    def predict(self, instrument: str = "SPX500_USD", timestamp: Optional[datetime] = None) -> Dict:
+        """Generate prediction for given instrument.
+
+        Args:
+            instrument: Trading instrument
+            timestamp: Optional timestamp (for historical predictions)
+
+        Returns:
+            Prediction dictionary
+        """
+        timestamp = timestamp or datetime.now()
+
+        # Try to get features from Feast
+        features = self.get_online_features(instrument)
+
+        if not self.is_loaded or not features:
+            # Return mock prediction if model not loaded or no features
+            return self._mock_prediction(instrument, timestamp)
+
+        try:
+            # Prepare feature vector
+            feature_vector = self._prepare_features(features)
+
+            # Make prediction
+            if self.scaler and self.model_type == "logistic":
+                feature_vector = self.scaler.transform([feature_vector])
+                prediction_proba = self.model.predict_proba(feature_vector)[0]
+            else:
+                prediction_proba = self.model.predict_proba([feature_vector])[0]
+
+            # Get class prediction
+            prediction_class = self.model.predict([feature_vector])[0]
+
+            # Convert to human-readable format
+            probability = float(prediction_proba[1])  # Probability of bullish
+            prediction_label = "bullish" if prediction_class == 1 else "bearish"
+
+            # Calculate confidence (distance from 0.5)
+            confidence = abs(probability - 0.5) * 2.0
+
+            # Signal strength (-1 to 1)
+            signal_strength = (probability - 0.5) * 2.0
+
+            return {
+                "instrument": instrument,
+                "timestamp": timestamp,
+                "prediction": prediction_label,
+                "probability": probability,
+                "confidence": confidence,
+                "signal_strength": signal_strength,
+                "features_used": len(self.feature_names),
+                "model_version": self.model_type
+            }
+
+        except Exception as e:
+            logger.error(f"Prediction error: {e}")
+            return self._mock_prediction(instrument, timestamp)
+
+    def _prepare_features(self, features: Dict) -> List[float]:
+        """Prepare feature vector from Feast features.
+
+        Args:
+            features: Raw features from Feast
+
+        Returns:
+            Feature vector matching model expectations
+        """
+        # This is a simplified version - in production, you'd need to:
+        # 1. Extract all features in the correct order
+        # 2. Handle missing values
+        # 3. Apply same transformations as training
+
+        feature_vector = []
+
+        # For now, use available features
+        for feature_name in self.feature_names:
+            value = features.get(feature_name, 0.0)
+            if isinstance(value, list) and len(value) > 0:
+                value = value[0]
+            feature_vector.append(float(value) if value is not None else 0.0)
+
+        return feature_vector
+
+    def _mock_prediction(self, instrument: str, timestamp: datetime) -> Dict:
+        """Generate mock prediction when model unavailable.
+
+        Args:
+            instrument: Trading instrument
+            timestamp: Prediction timestamp
+
+        Returns:
+            Mock prediction dictionary
+        """
+        # Generate deterministic but varied mock predictions
+        hour = timestamp.hour
+        minute = timestamp.minute
+
+        # Use time to create pseudo-random but consistent predictions
+        seed = hour * 60 + minute
+        np.random.seed(seed)
+
+        probability = np.random.uniform(0.3, 0.8)
+        prediction = "bullish" if probability > 0.5 else "bearish"
+        confidence = abs(probability - 0.5) * 2.0
+        signal_strength = (probability - 0.5) * 2.0
+
+        return {
+            "instrument": instrument,
+            "timestamp": timestamp,
+            "prediction": prediction,
+            "probability": probability,
+            "confidence": confidence,
+            "signal_strength": signal_strength,
+            "features_used": 0,
+            "model_version": "mock"
+        }
+
+    async def get_latest_prediction(self) -> Dict:
+        """Get the most recent prediction (for WebSocket streaming).
+
+        Returns:
+            Latest prediction dictionary
+        """
+        return self.predict("SPX500_USD")
+
+    async def get_recent_news(self, limit: int = 10) -> List[Dict]:
+        """Get recent news articles with sentiment.
+
+        Args:
+            limit: Maximum number of articles
+
+        Returns:
+            List of news articles
+        """
+        # Read from news Gold layer
+        news_path = Path("data/news/gold/news_signals/sp500_trading_signals.csv")
+
+        if not news_path.exists():
+            return []
+
+        try:
+            df = pd.read_csv(news_path)
+            df['signal_time'] = pd.to_datetime(df['signal_time'])
+            df = df.sort_values('signal_time', ascending=False).head(limit)
+
+            articles = []
+            for _, row in df.iterrows():
+                articles.append({
+                    "time": row['signal_time'].isoformat(),
+                    "headline": row.get('latest_headline', 'No headline'),
+                    "source": row.get('latest_source', 'Unknown'),
+                    "sentiment": float(row.get('avg_sentiment', 0.0)),
+                    "impact": self._calculate_impact(row.get('signal_strength', 0)),
+                })
+
+            return articles
+
+        except Exception as e:
+            logger.error(f"Error reading news: {e}")
+            return []
+
+    def _calculate_impact(self, signal_strength: float) -> str:
+        """Calculate news impact level.
+
+        Args:
+            signal_strength: Signal strength value
+
+        Returns:
+            Impact level: "low", "medium", or "high"
+        """
+        abs_strength = abs(signal_strength)
+
+        if abs_strength > 0.7:
+            return "high"
+        elif abs_strength > 0.4:
+            return "medium"
+        else:
+            return "low"

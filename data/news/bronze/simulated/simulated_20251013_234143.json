@@ -1,0 +1,11 @@
+{
+  "headline": "Corporate earnings beat expectations across sectors",
+  "published_at": "2025-10-13T23:41:43.678269",
+  "source": "MockNewsAPI",
+  "sentiment_score": 0.7114300460481751,
+  "url": "https://mock-news.com/article-2512",
+  "body": "Corporate earnings beat expectations across sectors. Market analysis continues to develop.",
+  "mock": true,
+  "streamed_at": "2025-10-13T23:41:43.678301",
+  "sentiment_type": "positive"
+}
