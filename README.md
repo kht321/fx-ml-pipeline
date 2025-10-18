@@ -93,9 +93,7 @@ curl -X POST http://localhost:5001/api/stream/negative
 
 ## 📚 Complete System Demo
 
-**For comprehensive walkthrough**, see **[Complete Demo Guide](docs/COMPLETE_DEMO_GUIDE.md)**
-
-30-minute demo includes:
+30-minute end-to-end demo includes:
 - ✅ Data ingestion (Market + News simulator)
 - ✅ Feature engineering (Bronze → Silver → Gold)
 - ✅ Model training with MLflow tracking
