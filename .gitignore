@@ -1,5 +1,4 @@
 .env
-docs/
 .venv*/
 __pycache__/
 *.pyc
@@ -10,6 +9,19 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Documentation (keep local only)
+docs/
+*.txt
+!requirements.txt
+
+# Logs (keep local only)
+logs/
+*.log
+
+# MLflow artifacts
+mlruns/
+mlartifacts/
 
 # Large data files (download using scripts instead)
 data/bronze/prices/*.ndjson
@@ -27,6 +39,7 @@ data_clean/silver/**/*.csv
 data_clean/gold/**/*.csv
 data_clean/gold/**/*.parquet
 data_clean/models/*.pkl
+data_clean/models/*.json
 data_clean/training_outputs/
 
 # Output files
@@ -41,4 +54,11 @@ outputs/
 
 # Temporary files
 /tmp/
-*.log
+
+# Docker volumes
+postgres_data/
+redis_data/
+airflow_logs/
+data_clean/*.zip
+*.zip
+*.db

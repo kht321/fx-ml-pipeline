@@ -12,20 +12,22 @@ services:
   # Build Airflow image once via airflow-init, others reuse it
   airflow-init:
     build: .
-    image: airflow-mlops:3.1
+    image: airflow-mlops:2.10
+    depends_on:
+      - postgres-airflow
     env_file: .env
-    command: >
-      bash -c "airflow db migrate"
+    command: bash /opt/airflow/init-airflow.sh
     user: "0:0"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
+      - ./init-airflow.sh:/opt/airflow/init-airflow.sh:ro
 
   airflow-web:
-    image: airflow-mlops:3.1
+    image: airflow-mlops:2.10
     depends_on: [airflow-init, postgres-airflow]
     env_file: .env
-    command: "api-server" 
+    command: webserver 
     environment:
       HOST_DATA_DIR: ${HOST_DATA_DIR}
       HOST_MODELS_DIR: ${HOST_MODELS_DIR}    
@@ -37,7 +39,7 @@ services:
       - ./models:/opt/airflow/models
 
   airflow-scheduler:
-    image: airflow-mlops:3.1
+    image: airflow-mlops:2.10
     depends_on: [airflow-web]  # or [postgres-airflow, airflow-init]
     env_file: .env
     environment:
@@ -52,7 +54,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock  # needed for DockerOperator
 
   airflow-dag-processor:
-    image: airflow-mlops:3.1
+    image: airflow-mlops:2.10
     depends_on: [airflow-web]
     env_file: .env
     command: dag-processor
