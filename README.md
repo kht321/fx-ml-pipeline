@@ -170,6 +170,57 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 
 **Note**: MLflow uses port 5002 (not 5000) to avoid conflict with macOS AirPlay Receiver.
 
+## 📰 Historical News Collection (FREE)
+
+**NEW**: Collect 5+ years of S&P 500 news for FREE using the hybrid scraper!
+
+### Quick Start
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Collect 2017-2025 historical news (~50k-100k articles in 1-3 hours)
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+    --start-date 2017-01-01 \
+    --end-date 2025-10-19 \
+    --sources gdelt
+
+# Cost: $0 | Articles: 50,000-100,000 | Time: 1-3 hours
+```
+
+### Features
+- ✅ **GDELT Project**: 2017-present, unlimited free access
+- ✅ **Alpha Vantage**: 25 calls/day (FREE with sentiment scores)
+- ✅ **Finnhub**: 60 calls/min, 1 year history (FREE)
+- ✅ **Automatic deduplication** across all sources
+- ✅ **S&P 500 filtering** - only relevant articles
+- ✅ **Compatible** with existing pipeline (Bronze/Silver/Gold)
+
+### Optional: Add Free API Keys for More Coverage
+```bash
+# Get free keys:
+# - Alpha Vantage: https://www.alphavantage.co/support/#api-key
+# - Finnhub: https://finnhub.io/register
+
+# Add to .env
+echo "ALPHAVANTAGE_KEY=your_key" >> .env
+echo "FINNHUB_KEY=your_key" >> .env
+
+# Run with all sources
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+    --start-date 2017-01-01 \
+    --sources all
+```
+
+### Documentation
+- **Quick Reference**: [docs/README_HYBRID_NEWS_SCRAPER.md](docs/README_HYBRID_NEWS_SCRAPER.md)
+- **Complete Guide**: [docs/HYBRID_NEWS_SCRAPER_GUIDE.md](docs/HYBRID_NEWS_SCRAPER_GUIDE.md)
+- **Configuration**: [configs/hybrid_news_sources.yaml](configs/hybrid_news_sources.yaml)
+
+**Savings**: $999-$120,000/year vs paid alternatives!
+
+---
+
 ## 🔄 Demo Workflows
 
 ### 1. Data Ingestion Demo
