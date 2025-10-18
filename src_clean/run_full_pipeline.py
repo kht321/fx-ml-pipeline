@@ -15,12 +15,22 @@ Pipeline Steps:
     5. Gold: Generate prediction labels
     6. Train: XGBoost model training
 
+News Sources Supported:
+    - Automatically processes ALL news sources in bronze/news/:
+      * bronze/news/*.json (original RSS scraper)
+      * bronze/news/hybrid/*.json (hybrid scraper - GDELT, Finnhub, etc.)
+      * Merges and deduplicates all articles
+
 Usage:
-    # Full pipeline
+    # Full pipeline with hybrid news scraper
     python src_clean/run_full_pipeline.py \\
         --bronze-market data_clean/bronze/market/spx500_usd_m1_5years.ndjson \\
         --bronze-news data_clean/bronze/news \\
         --output-dir data_clean
+
+    # The pipeline automatically finds and processes:
+    #   - data_clean/bronze/news/*.json (RSS feeds)
+    #   - data_clean/bronze/news/hybrid/*.json (GDELT + APIs)
 
     # Skip specific stages
     python src_clean/run_full_pipeline.py \\

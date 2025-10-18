@@ -1,0 +1,288 @@
+# Hybrid News Scraper Configuration
+# Free sources for 5-year historical news collection
+
+# ============================================================================
+# FREE NEWS SOURCES (No cost, no credit card required)
+# ============================================================================
+
+free_sources:
+
+  # GDELT Project (BEST for historical data)
+  gdelt:
+    enabled: true
+    historical_coverage: "2017-01-01 to present"
+    update_frequency: "Every 15 minutes"
+    cost: "FREE"
+    rate_limit: "Unlimited (be respectful)"
+    api_endpoint: "https://api.gdeltproject.org/api/v2/doc/doc"
+    features:
+      - "65 languages (machine translated)"
+      - "Global news coverage"
+      - "Sentiment analysis"
+      - "Event extraction"
+    limitations:
+      - "Only back to 2017"
+      - "3-month rolling window for API"
+    recommended_use: "Primary source for 2017-present"
+
+  # Common Crawl News
+  commoncrawl:
+    enabled: false  # Requires WARC parsing (complex)
+    historical_coverage: "2016-08-01 to present"
+    update_frequency: "Daily"
+    cost: "FREE"
+    rate_limit: "Unlimited (S3 public dataset)"
+    data_location: "https://data.commoncrawl.org/crawl-data/CC-NEWS/"
+    features:
+      - "100k+ articles per day"
+      - "Raw HTML/text"
+      - "Global coverage"
+    limitations:
+      - "WARC format (complex parsing)"
+      - "No built-in filtering"
+      - "Large file sizes (GB per day)"
+    recommended_use: "Advanced users only"
+    implementation_status: "Placeholder (needs warcio library)"
+
+  # Internet Archive Wayback Machine
+  wayback:
+    enabled: false  # Optional supplementary source
+    historical_coverage: "1996 to present (varies by site)"
+    update_frequency: "Varies"
+    cost: "FREE"
+    rate_limit: "Unlimited (be respectful)"
+    api_endpoint: "https://web.archive.org/cdx/search/cdx"
+    features:
+      - "Historical snapshots"
+      - "Major news sites archived"
+      - "CDX API for search"
+    limitations:
+      - "Incomplete coverage"
+      - "Not all pages archived"
+      - "Requires parsing original HTML"
+    recommended_use: "Gap-filling for specific sites"
+    implementation_status: "Basic CDX search implemented"
+
+  # SEC EDGAR (Company filings)
+  sec_edgar:
+    enabled: false  # Supplementary (not traditional news)
+    historical_coverage: "1994 to present"
+    update_frequency: "Real-time"
+    cost: "FREE"
+    rate_limit: "10 requests/second (official limit)"
+    api_endpoint: "https://data.sec.gov/submissions/"
+    features:
+      - "Official company filings"
+      - "10-K, 10-Q, 8-K, etc."
+      - "JSON API"
+    limitations:
+      - "Company filings only (not news)"
+      - "Different format than news"
+    recommended_use: "Fundamental data supplement"
+    implementation_status: "Placeholder"
+    user_agent_required: "fx-ml-pipeline research@example.com"
+
+# ============================================================================
+# FREE API SOURCES (Require API key, but free tier available)
+# ============================================================================
+
+free_api_sources:
+
+  # Alpha Vantage
+  alphavantage:
+    enabled: true
+    historical_coverage: "Recent news only (weeks)"
+    cost: "FREE (25 calls/day)"
+    rate_limit: "25 requests per day"
+    signup_url: "https://www.alphavantage.co/support/#api-key"
+    api_endpoint: "https://www.alphavantage.co/query?function=NEWS_SENTIMENT"
+    env_var: "ALPHAVANTAGE_KEY"
+    features:
+      - "News sentiment scores"
+      - "Ticker-specific news"
+      - "Relevance scores"
+    limitations:
+      - "25 calls/day limit (free)"
+      - "Recent news only"
+    recommended_use: "Daily incremental updates"
+
+  # Finnhub
+  finnhub:
+    enabled: true
+    historical_coverage: "Past 1 year"
+    cost: "FREE (60 calls/min)"
+    rate_limit: "60 requests per minute"
+    signup_url: "https://finnhub.io/register"
+    api_endpoint: "https://finnhub.io/api/v1/news"
+    env_var: "FINNHUB_KEY"
+    features:
+      - "Market news"
+      - "Company news"
+      - "Real-time updates"
+    limitations:
+      - "1 year historical max (free)"
+      - "60 calls/min limit"
+    recommended_use: "Past year + daily updates"
+
+# ============================================================================
+# COLLECTION STRATEGY FOR 5 YEARS (2020-2025)
+# ============================================================================
+
+collection_strategy:
+
+  # Phase 1: GDELT for 2017-2025 (PRIMARY)
+  phase_1:
+    period: "2017-01-01 to 2025-10-19"
+    source: "gdelt"
+    estimated_articles: "~50,000 - 100,000 articles"
+    estimated_time: "2-5 hours (API rate dependent)"
+    command: |
+      python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+        --start-date 2017-01-01 \
+        --end-date 2025-10-19 \
+        --sources gdelt
+
+  # Phase 2: Finnhub for past 1 year (SUPPLEMENT)
+  phase_2:
+    period: "2024-10-19 to 2025-10-19"
+    source: "finnhub"
+    estimated_articles: "~5,000 - 10,000 articles"
+    estimated_time: "1-2 hours"
+    command: |
+      python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+        --start-date 2024-10-19 \
+        --end-date 2025-10-19 \
+        --sources finnhub
+
+  # Phase 3: Daily incremental (ONGOING)
+  phase_3:
+    period: "Daily cron job"
+    source: "gdelt,alphavantage,finnhub"
+    estimated_articles: "~100-500 per day"
+    estimated_time: "5-10 minutes"
+    command: |
+      python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+        --mode incremental \
+        --sources all
+    cron_schedule: "0 1 * * *"  # Daily at 1 AM
+
+  # Coverage gaps (2020-2016)
+  coverage_gaps:
+    period: "2020-10-19 to 2016-08-01"
+    note: "Outside GDELT coverage (pre-2017)"
+    options:
+      - "Wait for daily collection to accumulate"
+      - "Use Common Crawl (complex WARC parsing)"
+      - "Use Wayback Machine (manual effort)"
+      - "Purchase historical API access ($1,000/year)"
+    recommendation: "Start with GDELT 2017-2025, then decide on gap-filling strategy"
+
+# ============================================================================
+# S&P 500 RELEVANCE KEYWORDS
+# ============================================================================
+
+sp500_keywords:
+  market_indices:
+    - "s&p 500"
+    - "sp500"
+    - "s&p500"
+    - "spx"
+    - "standard and poor"
+    - "spy"
+    - "stock market"
+    - "wall street"
+    - "nasdaq"
+    - "dow jones"
+
+  economic_indicators:
+    - "federal reserve"
+    - "fed"
+    - "fomc"
+    - "interest rate"
+    - "inflation"
+    - "cpi"
+    - "ppi"
+    - "employment"
+    - "jobs report"
+    - "gdp"
+    - "earnings"
+    - "corporate earnings"
+
+  market_sentiment:
+    - "market rally"
+    - "market selloff"
+    - "bull market"
+    - "bear market"
+    - "volatility"
+    - "vix"
+    - "market sentiment"
+    - "recession"
+    - "economic growth"
+
+  policy:
+    - "monetary policy"
+    - "fiscal policy"
+    - "trade war"
+    - "tech stocks"
+    - "bank stocks"
+
+# ============================================================================
+# EXPECTED TIMELINE FOR FULL 5-YEAR COLLECTION
+# ============================================================================
+
+timeline:
+  immediate:
+    duration: "2-3 hours"
+    coverage: "2017-2025 (via GDELT)"
+    articles: "~50,000 - 100,000"
+    cost: "$0"
+
+  supplementary:
+    duration: "1-2 hours"
+    coverage: "2024-2025 (via Finnhub)"
+    articles: "~5,000 - 10,000"
+    cost: "$0"
+
+  daily_ongoing:
+    duration: "5-10 min/day"
+    coverage: "Daily updates"
+    articles: "~100-500 per day"
+    cost: "$0"
+
+  gap_period:
+    duration: "N/A (pre-2017)"
+    coverage: "2020-10-19 to 2017-01-01"
+    options:
+      - name: "Wait 3 years of daily collection"
+        cost: "$0"
+        effort: "Low (automated)"
+      - name: "Common Crawl parsing"
+        cost: "$0"
+        effort: "High (complex)"
+      - name: "Paid API (EODHD)"
+        cost: "$1,000/year"
+        effort: "Low (simple API)"
+
+# ============================================================================
+# OUTPUT STRUCTURE
+# ============================================================================
+
+output:
+  directory: "data_clean/bronze/news/hybrid/"
+  format: "Individual JSON files per article"
+  schema:
+    article_id: "MD5 hash of title + URL"
+    headline: "Article title"
+    body: "Article summary/excerpt"
+    url: "Original article URL"
+    source: "Source identifier (e.g., gdelt_reuters)"
+    published_at: "ISO 8601 timestamp (UTC)"
+    collected_at: "ISO 8601 timestamp (UTC)"
+    sp500_relevant: "Boolean (always true)"
+    collection_method: "Source API name"
+    additional_fields: "Source-specific metadata"
+
+  deduplication:
+    method: "MD5 hash of title + URL"
+    tracking_file: "seen_articles.json"
+    scope: "Across all sources"

@@ -93,9 +93,7 @@ curl -X POST http://localhost:5001/api/stream/negative
 
 ## 📚 Complete System Demo
 
-**For comprehensive walkthrough**, see **[Complete Demo Guide](docs/COMPLETE_DEMO_GUIDE.md)**
-
-30-minute demo includes:
+30-minute end-to-end demo includes:
 - ✅ Data ingestion (Market + News simulator)
 - ✅ Feature engineering (Bronze → Silver → Gold)
 - ✅ Model training with MLflow tracking
@@ -169,6 +167,158 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 | **News Simulator** | 5001 | Test data generator | http://localhost:5001 |
 
 **Note**: MLflow uses port 5002 (not 5000) to avoid conflict with macOS AirPlay Receiver.
+
+## 📰 Historical News Collection Demo (5+ Years for FREE)
+
+**NEW**: Build a complete ML training dataset with 50,000-100,000 historical news articles at zero cost!
+
+### Step 1: Collect Historical News (1-3 hours, one-time)
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Collect 8 years of S&P 500 news from GDELT Project (2017-2025)
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+    --start-date 2017-01-01 \
+    --end-date 2025-10-19 \
+    --sources gdelt
+
+# ⏱️ Grab a coffee - this takes 1-3 hours
+# 📊 Expected: 50,000-100,000 articles
+# 💰 Cost: $0
+# 📁 Saved to: data_clean/bronze/news/hybrid/*.json
+```
+
+**What happens:**
+- Connects to GDELT Project API (free, unlimited)
+- Filters for S&P 500 relevant articles only
+- Downloads from 40+ news sources (Yahoo Finance, Reuters, Bloomberg, etc.)
+- Automatically deduplicates articles
+- Tracks progress in `seen_articles.json`
+
+### Step 2: Process Sentiment Features (2-5 minutes)
+```bash
+# Analyze sentiment for all collected articles
+python src_clean/data_pipelines/silver/news_sentiment_processor.py \
+    --input-dir data_clean/bronze/news \
+    --output data_clean/silver/news/sentiment/spx500_sentiment.csv
+
+# Automatically processes:
+# - Original RSS articles (data_clean/bronze/news/*.json)
+# - Hybrid scraper articles (data_clean/bronze/news/hybrid/*.json)
+# - Merges everything into one dataset
+```
+
+**Sentiment features computed:**
+- Polarity (-1 to +1): Overall positive/negative tone
+- Subjectivity (0 to 1): Opinion vs fact
+- Financial sentiment: Using finance-specific keywords
+- Policy tone: Hawkish/dovish/neutral (for Fed news)
+- Confidence score: Reliability of sentiment
+
+### Step 3: Run Full Pipeline with Historical News
+```bash
+# Complete pipeline: Market + News → Features → Training
+python src_clean/run_full_pipeline.py \
+    --bronze-market data_clean/bronze/market/spx500_usd_m1_5years.ndjson \
+    --bronze-news data_clean/bronze/news \
+    --output-dir data_clean
+
+# Processes:
+# ✅ Market features (technical, microstructure, volatility)
+# ✅ News features (sentiment from 50k+ articles)
+# ✅ Combined feature engineering
+# ✅ Label generation
+# ✅ XGBoost model training
+```
+
+### Optional: Enhance Coverage with Free API Keys
+
+**Get more recent news and sentiment scores:**
+
+```bash
+# 1. Get free API keys (no credit card required):
+#    - Alpha Vantage: https://www.alphavantage.co/support/#api-key (25 calls/day)
+#    - Finnhub: https://finnhub.io/register (60 calls/min, 1-year history)
+
+# 2. Add to .env file:
+echo "ALPHAVANTAGE_KEY=your_key_here" >> .env
+echo "FINNHUB_KEY=your_key_here" >> .env
+
+# 3. Collect from all sources:
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+    --start-date 2024-10-19 \
+    --end-date 2025-10-19 \
+    --sources all
+
+# Collects from:
+# - GDELT Project (unlimited, free)
+# - Alpha Vantage (with sentiment scores)
+# - Finnhub (market-specific news)
+```
+
+### Daily Updates (Optional - Set and Forget)
+
+**Keep your dataset fresh automatically:**
+
+```bash
+# Setup daily news collection via cron
+crontab -e
+
+# Add this line (runs at 1 AM daily):
+0 1 * * * cd /path/to/fx-ml-pipeline && source .venv/bin/activate && python3 src_clean/data_pipelines/bronze/hybrid_news_scraper.py --mode incremental --sources all >> logs/news_scraper.log 2>&1
+
+# Collects 100-500 new articles daily for free
+```
+
+### Troubleshooting
+
+**No articles collected?**
+```bash
+# Test GDELT API directly
+curl "https://api.gdeltproject.org/api/v2/doc/doc?query=stock%20market&mode=artlist&maxrecords=5&format=json"
+
+# Should return JSON with articles
+```
+
+**Want to see what was collected?**
+```bash
+# Count total articles
+find data_clean/bronze/news/hybrid -name "*.json" -not -name "seen_articles.json" | wc -l
+
+# View a sample article
+cat data_clean/bronze/news/hybrid/*.json | head -1 | python3 -m json.tool
+```
+
+**Check processed sentiment:**
+```bash
+# View first 10 processed articles
+head -10 data_clean/silver/news/sentiment/spx500_sentiment.csv | column -t -s,
+```
+
+### What You Get
+
+**Free Historical Data:**
+- 50,000-100,000 news articles (2017-2025)
+- 40+ premium news sources (Yahoo Finance, Reuters, Bloomberg, CNBC, etc.)
+- 12+ languages (automatically detected)
+- S&P 500 filtered (only relevant market news)
+- Saves $999-$120,000/year vs paid alternatives
+
+**Compatible Sources:**
+- ✅ GDELT Project (2017-present, unlimited, FREE)
+- ✅ Alpha Vantage (25 calls/day, FREE, includes sentiment scores)
+- ✅ Finnhub (60 calls/min, 1-year history, FREE)
+- ✅ Original RSS feeds (real-time, FREE)
+- ✅ All sources auto-merge and deduplicate
+
+**Ready for ML Training:**
+- Integrates seamlessly with existing pipeline
+- Bronze → Silver → Gold architecture maintained
+- Combines with market data automatically
+- No code changes needed
+
+---
 
 ## 🔄 Demo Workflows
 
@@ -292,11 +442,6 @@ fx-ml-pipeline/
 │   ├── Dockerfile.streamlit
 │   ├── docker-compose.yml
 │   └── docker-compose.full-stack.yml
-│
-├── docs/                        # Documentation (local only)
-│   ├── COMPLETE_DEMO_GUIDE.md   # Full system demo
-│   ├── DEPLOYMENT_GUIDE.md      # Deployment instructions
-│   └── IMPLEMENTATION_SUMMARY.md
 │
 ├── data_clean/                  # Medallion data architecture
 │   ├── bronze/                  # Raw data

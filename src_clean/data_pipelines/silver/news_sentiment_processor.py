@@ -8,16 +8,25 @@ Purpose:
     Computes sentiment scores, polarity, subjectivity, and financial tone indicators.
 
 Input:
-    - Bronze news data: data_clean/bronze/news/*.json
+    - Bronze news data (supports multiple sources):
+      * data_clean/bronze/news/*.json (original RSS scraper)
+      * data_clean/bronze/news/hybrid/*.json (hybrid scraper - GDELT, etc.)
+      * Automatically merges articles from all sources
+      * Deduplicates based on article_id
 
 Output:
     - Silver sentiment features: data_clean/silver/news/sentiment/*.csv
     - Features: Sentiment score, polarity, confidence, financial tone
 
 Usage:
+    # Process all news sources (RSS + Hybrid)
     python src_clean/data_pipelines/silver/news_sentiment_processor.py \
         --input-dir data_clean/bronze/news \
         --output data_clean/silver/news/sentiment/spx500_sentiment.csv
+
+    # The processor automatically finds and loads articles from:
+    #   - data_clean/bronze/news/*.json
+    #   - data_clean/bronze/news/hybrid/*.json
 """
 
 import argparse
@@ -64,11 +73,38 @@ class SentimentProcessor:
         }
 
     def load_articles(self) -> List[Dict]:
-        """Load all articles from bronze layer."""
+        """
+        Load all articles from bronze layer.
+
+        Supports multiple bronze sources:
+        - data_clean/bronze/news/*.json (original RSS scraper)
+        - data_clean/bronze/news/hybrid/*.json (hybrid scraper)
+        """
         logger.info(f"Loading articles from {self.input_dir}")
 
         articles = []
+
+        # Check if input_dir has subdirectories (e.g., hybrid/)
+        subdirs = [d for d in self.input_dir.iterdir() if d.is_dir()]
+
+        if subdirs:
+            # Load from subdirectories (e.g., hybrid/)
+            for subdir in subdirs:
+                logger.info(f"  Loading from subdirectory: {subdir.name}/")
+                for json_file in subdir.glob("*.json"):
+                    if json_file.name == "seen_articles.json":
+                        continue  # Skip tracking file
+                    try:
+                        with open(json_file, 'r') as f:
+                            article = json.load(f)
+                            articles.append(article)
+                    except Exception as e:
+                        logger.warning(f"Could not load {json_file}: {e}")
+
+        # Also load from root directory (backward compatibility)
         for json_file in self.input_dir.glob("*.json"):
+            if json_file.name == "seen_articles.json":
+                continue
             try:
                 with open(json_file, 'r') as f:
                     article = json.load(f)
@@ -76,7 +112,7 @@ class SentimentProcessor:
             except Exception as e:
                 logger.warning(f"Could not load {json_file}: {e}")
 
-        logger.info(f"Loaded {len(articles)} articles")
+        logger.info(f"Loaded {len(articles)} articles total")
         return articles
 
     def compute_textblob_sentiment(self, text: str) -> tuple:
