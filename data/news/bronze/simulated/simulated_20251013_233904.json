@@ -1,0 +1,11 @@
+{
+  "headline": "Tech stocks rally as market sentiment improves",
+  "published_at": "2025-10-13T23:39:04.405296",
+  "source": "MockNewsAPI",
+  "sentiment_score": 0.5464711702124391,
+  "url": "https://mock-news.com/article-5279",
+  "body": "Tech stocks rally as market sentiment improves. Market analysis continues to develop.",
+  "mock": true,
+  "streamed_at": "2025-10-13T23:39:04.405318",
+  "sentiment_type": "positive"
+}

@@ -1,8 +1,0 @@
-/Users/kevintaukoor/Projects/MLE Group Original/fx-ml-pipeline/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-ERROR:root:Failed to load FinGPT model: FinGPT/fingpt-sentiment_llama2-7b_lora is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
-If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
-WARNING:root:Failed to initialize FinGPT, falling back to lexicon: FinGPT/fingpt-sentiment_llama2-7b_lora is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'
-If this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`
-[build_news_features] Starting news feature engineering (FinGPT mode)
-[build_news_features] Finished: 0 articles processed

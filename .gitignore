@@ -1,5 +1,4 @@
 .env
-docs/*.md
 .venv*/
 __pycache__/
 *.pyc
@@ -11,11 +10,43 @@ __pycache__/
 dist/
 build/
 
+# Documentation (keep local only)
+docs/
+*.txt
+!requirements.txt
+
+# Logs (keep local only)
+logs/
+*.log
+
+# MLflow artifacts
+mlruns/
+mlartifacts/
+
 # Large data files (download using scripts instead)
 data/bronze/prices/*.ndjson
 data/bronze/prices/*.backup
 data/silver/**/*.parquet
 data/gold/**/*.parquet
+data/sp500/
+data/news/bronze/simulated/
+data/news/gold/
+data/news/silver/
+
+# New clean data structure (exclude large files)
+data_clean/bronze/market/*.ndjson
+data_clean/silver/**/*.csv
+data_clean/gold/**/*.csv
+data_clean/gold/**/*.parquet
+data_clean/models/*.pkl
+data_clean/models/*.json
+data_clean/training_outputs/
+
+# Output files
+outputs/
+*.csv
+*.pkl
+*.joblib
 
 # OS files
 .DS_Store
@@ -23,4 +54,11 @@ data/gold/**/*.parquet
 
 # Temporary files
 /tmp/
-*.log
+
+# Docker volumes
+postgres_data/
+redis_data/
+airflow_logs/
+data_clean/*.zip
+*.zip
+*.db
