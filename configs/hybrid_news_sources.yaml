@@ -182,32 +182,63 @@ collection_strategy:
 # ============================================================================
 
 sp500_keywords:
+  # Index references
   market_indices:
     - "s&p 500"
     - "sp500"
     - "s&p500"
     - "spx"
-    - "standard and poor"
     - "spy"
-    - "stock market"
+    - "standard and poor"
     - "wall street"
     - "nasdaq"
     - "dow jones"
+    - "us equities"
+    - "broad market"
+    - "stock market"
+    - "index fund"
 
+  # Monetary policy & macro
   economic_indicators:
     - "federal reserve"
     - "fed"
     - "fomc"
     - "interest rate"
+    - "rate hike"
+    - "rate cut"
     - "inflation"
     - "cpi"
     - "ppi"
+    - "core inflation"
+    - "economic growth"
+    - "gdp"
+    - "unemployment"
+    - "jobless claims"
+    - "recession"
+    - "soft landing"
+    - "hard landing"
+    - "deflation"
+    - "disinflation"
+    - "stagflation"
     - "employment"
     - "jobs report"
-    - "gdp"
-    - "earnings"
-    - "corporate earnings"
 
+  # Bond market & yields
+  bond_market:
+    - "treasury yields"
+    - "10-year yield"
+    - "2-year yield"
+    - "bond market"
+    - "treasuries"
+    - "government bonds"
+    - "sovereign debt"
+    - "yield curve"
+    - "inverted yield curve"
+    - "bond selloff"
+    - "bond rally"
+    - "fixed income"
+
+  # Market sentiment
   market_sentiment:
     - "market rally"
     - "market selloff"
@@ -215,16 +246,38 @@ sp500_keywords:
     - "bear market"
     - "volatility"
     - "vix"
+    - "fear index"
+    - "risk-on"
+    - "risk-off"
+    - "flight to safety"
+    - "safe haven"
     - "market sentiment"
-    - "recession"
-    - "economic growth"
 
-  policy:
-    - "monetary policy"
-    - "fiscal policy"
-    - "trade war"
+  # Earnings season
+  earnings:
+    - "earnings season"
+    - "big tech earnings"
+    - "bank earnings"
+    - "earnings outlook"
+    - "earnings"
+    - "corporate earnings"
     - "tech stocks"
     - "bank stocks"
+
+  # Global macro / shocks
+  global_macro:
+    - "oil prices"
+    - "brent"
+    - "wti"
+    - "commodity shock"
+    - "geopolitical risk"
+    - "sanctions"
+    - "trade war"
+    - "tariffs"
+    - "pandemic"
+    - "supply chain disruption"
+    - "monetary policy"
+    - "fiscal policy"
 
 # ============================================================================
 # EXPECTED TIMELINE FOR FULL 5-YEAR COLLECTION
