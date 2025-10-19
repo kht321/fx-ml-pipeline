@@ -178,22 +178,26 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 source .venv/bin/activate
 
 # Collect 8 years of S&P 500 news from GDELT Project (2017-2025)
-python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+# Enhanced version fetches FULL article content (not just metadata)
+python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \
     --start-date 2017-01-01 \
     --end-date 2025-10-19 \
-    --sources gdelt
+    --sources gdelt \
+    --fetch-content
 
 # ⏱️ Grab a coffee - this takes 1-3 hours
-# 📊 Expected: 50,000-100,000 articles
+# 📊 Expected: 50,000-100,000 articles with full text
 # 💰 Cost: $0
 # 📁 Saved to: data_clean/bronze/news/hybrid/*.json
 ```
 
 **What happens:**
 - Connects to GDELT Project API (free, unlimited)
-- Filters for S&P 500 relevant articles only
+- Filters for S&P 500 relevant articles using expanded keywords
+- Fetches full article content from original URLs (not just metadata)
 - Downloads from 40+ news sources (Yahoo Finance, Reuters, Bloomberg, etc.)
 - Automatically deduplicates articles
+- Caches content to avoid re-fetching
 - Tracks progress in `seen_articles.json`
 
 ### Step 2: Process Sentiment Features (2-5 minutes)
@@ -246,10 +250,11 @@ echo "ALPHAVANTAGE_KEY=your_key_here" >> .env
 echo "FINNHUB_KEY=your_key_here" >> .env
 
 # 3. Collect from all sources:
-python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \
     --start-date 2024-10-19 \
     --end-date 2025-10-19 \
-    --sources all
+    --sources all \
+    --fetch-content
 
 # Collects from:
 # - GDELT Project (unlimited, free)
@@ -266,7 +271,7 @@ python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
 crontab -e
 
 # Add this line (runs at 1 AM daily):
-0 1 * * * cd /path/to/fx-ml-pipeline && source .venv/bin/activate && python3 src_clean/data_pipelines/bronze/hybrid_news_scraper.py --mode incremental --sources all >> logs/news_scraper.log 2>&1
+0 1 * * * cd /path/to/fx-ml-pipeline && source .venv/bin/activate && python3 src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py --mode incremental --sources all --fetch-content >> logs/news_scraper.log 2>&1
 
 # Collects 100-500 new articles daily for free
 ```
