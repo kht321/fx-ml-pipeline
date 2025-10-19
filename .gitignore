@@ -41,6 +41,7 @@ data_clean/gold/**/*.parquet
 data_clean/models/*.pkl
 data_clean/models/*.json
 data_clean/training_outputs/
+data_clean/
 
 # Output files
 outputs/
