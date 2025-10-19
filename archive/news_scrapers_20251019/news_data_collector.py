@@ -83,36 +83,22 @@ class NewsDataCollector:
 
         # S&P 500 relevant keywords
         self.sp500_keywords = {
-            # Index references
-            's&p 500', 'sp500', 's&p500', 'spx', 'spy', 'standard and poor',
-            'wall street', 'nasdaq', 'dow jones', 'us equities', 'broad market',
-            'stock market', 'index fund',
+            # S&P 500 specific
+            's&p 500', 'sp500', 's&p500', 'spx', 'standard and poor',
+            'spy', 'index fund', 'stock market', 'wall street',
 
-            # Monetary policy & macro
-            'federal reserve', 'fed', 'fomc', 'interest rate', 'rate hike', 'rate cut',
-            'inflation', 'cpi', 'ppi', 'core inflation', 'economic growth', 'gdp',
-            'unemployment', 'jobless claims', 'recession', 'soft landing', 'hard landing',
-            'deflation', 'disinflation', 'stagflation', 'employment', 'jobs report',
-            'monetary policy', 'fiscal policy',
+            # Market drivers
+            'federal reserve', 'fed', 'fomc', 'interest rate',
+            'inflation', 'cpi', 'ppi', 'employment', 'jobs report',
+            'gdp', 'earnings', 'corporate earnings', 'nasdaq', 'dow jones',
 
-            # Bond market & yields
-            'treasury yields', '10-year yield', '2-year yield', 'bond market',
-            'treasuries', 'government bonds', 'sovereign debt', 'yield curve',
-            'inverted yield curve', 'bond selloff', 'bond rally', 'fixed income',
-
-            # Market sentiment
+            # Sentiment indicators
             'market rally', 'market selloff', 'bull market', 'bear market',
-            'volatility', 'vix', 'fear index', 'risk-on', 'risk-off',
-            'flight to safety', 'safe haven', 'market sentiment',
+            'volatility', 'vix', 'market sentiment',
 
-            # Earnings season (index-level impact)
-            'earnings season', 'big tech earnings', 'bank earnings', 'earnings outlook',
-            'earnings', 'corporate earnings', 'tech stocks', 'bank stocks',
-
-            # Global macro / shocks that move S&P broadly
-            'oil prices', 'brent', 'wti', 'commodity shock',
-            'geopolitical risk', 'sanctions', 'trade war', 'tariffs',
-            'pandemic', 'supply chain disruption'
+            # Economic events
+            'recession', 'economic growth', 'monetary policy',
+            'fiscal policy', 'trade war', 'tech stocks', 'bank stocks'
         }
 
         # RSS Feed sources

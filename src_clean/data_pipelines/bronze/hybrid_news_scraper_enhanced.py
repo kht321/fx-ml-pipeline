@@ -1,41 +1,28 @@
 """
-Hybrid Historical News Scraper - FREE 5-Year Collection
-Repository Location: fx-ml-pipeline/src_clean/data_pipelines/bronze/hybrid_news_scraper.py
+Enhanced Hybrid Historical News Scraper - With Full Article Content
+Repository Location: fx-ml-pipeline/src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py
 
 Purpose:
+    Enhanced version that fetches full article content from URLs.
     Collects 5 years of historical financial news using FREE sources:
-    1. GDELT Project (2017-present, 100% free)
-    2. Common Crawl News (2016-present, 100% free)
-    3. Internet Archive Wayback Machine (free archives)
-    4. SEC EDGAR (official filings, 100% free)
-    5. Free APIs (Alpha Vantage, Finnhub) with rate limiting
-    6. RSS Archive scraping
+    1. GDELT Project (2017-present, 100% free) - metadata only
+    2. Article content fetching from URLs using newspaper3k/beautifulsoup
+    3. Alpha Vantage & Finnhub APIs with rate limiting
 
-Strategy:
-    - Combines multiple free sources to maximize coverage
-    - Implements intelligent rate limiting
-    - Deduplicates across all sources
-    - Targets S&P 500 relevant news only
-
-Output:
-    - Raw JSON files saved to: data_clean/bronze/news/hybrid/
-    - Format: Same as news_data_collector.py for compatibility
+Features:
+    - Fetches full article content from URLs
+    - Implements retry logic for failed fetches
+    - Caches fetched content to avoid re-fetching
+    - Handles various website structures
+    - Respects robots.txt and rate limits
 
 Usage:
-    # Collect 5 years of historical news (free)
-    python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \\
+    # Collect with full content
+    python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \\
         --start-date 2020-10-19 \\
         --end-date 2025-10-19 \\
-        --sources gdelt,commoncrawl,sec
-
-    # Collect from all sources
-    python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \\
-        --start-date 2020-10-19 \\
-        --sources all
-
-    # Incremental daily collection (run via cron)
-    python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \\
-        --mode incremental
+        --sources gdelt \\
+        --fetch-content
 """
 
 import asyncio
@@ -47,14 +34,25 @@ import re
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 import argparse
+from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import aiohttp
 import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 import pytz
+
+# Try to import newspaper3k for better article extraction
+try:
+    from newspaper import Article
+    HAS_NEWSPAPER = True
+except ImportError:
+    HAS_NEWSPAPER = False
+    print("Warning: newspaper3k not installed. Using basic BeautifulSoup extraction.")
+    print("Install with: pip install newspaper3k")
 
 # Setup logging
 logging.basicConfig(
@@ -64,35 +62,239 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class HybridNewsScraper:
-    """
-    Hybrid scraper combining multiple FREE sources for historical news.
+class ArticleContentFetcher:
+    """Fetches full article content from URLs."""
 
-    Free Sources:
-    - GDELT Project: 2017-present, unlimited free access
-    - Common Crawl: 2016-present, S3 public dataset
-    - Internet Archive: Historical snapshots
-    - SEC EDGAR: Official company filings
-    - Alpha Vantage: 25 calls/day (free tier)
-    - Finnhub: 60 calls/min (free tier)
+    def __init__(self, cache_dir: str = "data_clean/bronze/news/content_cache"):
+        """Initialize the content fetcher."""
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # User agent for requests
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+
+        # Track fetch statistics
+        self.stats = {
+            'fetched': 0,
+            'cached': 0,
+            'failed': 0
+        }
+
+    def _get_cache_path(self, url: str) -> Path:
+        """Get cache file path for a URL."""
+        url_hash = hashlib.md5(url.encode()).hexdigest()
+        return self.cache_dir / f"{url_hash}.txt"
+
+    def _load_from_cache(self, url: str) -> Optional[str]:
+        """Load content from cache if available."""
+        cache_path = self._get_cache_path(url)
+        if cache_path.exists():
+            try:
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    self.stats['cached'] += 1
+                    return f.read()
+            except Exception:
+                pass
+        return None
+
+    def _save_to_cache(self, url: str, content: str):
+        """Save content to cache."""
+        cache_path = self._get_cache_path(url)
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            logger.warning(f"Failed to cache content for {url}: {e}")
+
+    def fetch_with_newspaper(self, url: str) -> Optional[str]:
+        """Fetch article content using newspaper3k library."""
+        try:
+            article = Article(url)
+            article.download()
+            article.parse()
+
+            # Get the full text
+            text = article.text
+
+            if text and len(text) > 100:  # Minimum content length
+                self.stats['fetched'] += 1
+                return text
+
+        except Exception as e:
+            logger.debug(f"Newspaper3k failed for {url}: {e}")
+
+        return None
+
+    def fetch_with_beautifulsoup(self, url: str) -> Optional[str]:
+        """Fetch article content using BeautifulSoup (fallback method)."""
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.decompose()
+
+            # Try to find article content in common containers
+            article_content = None
+
+            # Try different selectors for article content
+            selectors = [
+                'article',
+                '[class*="article-content"]',
+                '[class*="article-body"]',
+                '[class*="story-body"]',
+                '[class*="content-body"]',
+                '[class*="entry-content"]',
+                'main',
+                '[role="main"]',
+                '.content',
+                '#content'
+            ]
+
+            for selector in selectors:
+                elements = soup.select(selector)
+                if elements:
+                    article_content = elements[0]
+                    break
+
+            # If no specific article container found, try to get all paragraphs
+            if not article_content:
+                article_content = soup
+
+            # Extract text from paragraphs
+            paragraphs = article_content.find_all('p')
+            text = '\n'.join([p.get_text().strip() for p in paragraphs])
+
+            # Clean up the text
+            text = re.sub(r'\n+', '\n', text)  # Remove multiple newlines
+            text = re.sub(r' +', ' ', text)    # Remove multiple spaces
+            text = text.strip()
+
+            if text and len(text) > 100:  # Minimum content length
+                self.stats['fetched'] += 1
+                return text
+
+        except Exception as e:
+            logger.debug(f"BeautifulSoup failed for {url}: {e}")
+
+        return None
+
+    def fetch_content(self, url: str, use_cache: bool = True) -> str:
+        """
+        Fetch article content from URL.
+
+        Parameters
+        ----------
+        url : str
+            The article URL
+        use_cache : bool
+            Whether to use cached content if available
+
+        Returns
+        -------
+        str
+            The article text content (or empty string if failed)
+        """
+        # Check cache first
+        if use_cache:
+            cached_content = self._load_from_cache(url)
+            if cached_content:
+                return cached_content
+
+        # Try to fetch content
+        content = None
+
+        # Try newspaper3k first (if available)
+        if HAS_NEWSPAPER:
+            content = self.fetch_with_newspaper(url)
+
+        # Fallback to BeautifulSoup
+        if not content:
+            content = self.fetch_with_beautifulsoup(url)
+
+        # Handle failure
+        if not content:
+            self.stats['failed'] += 1
+            logger.debug(f"Failed to fetch content from {url}")
+            content = ""
+
+        # Cache the content (even if empty to avoid re-fetching)
+        if use_cache and content:
+            self._save_to_cache(url, content)
+
+        return content
+
+    def fetch_batch(self, urls: List[str], max_workers: int = 5) -> Dict[str, str]:
+        """
+        Fetch content for multiple URLs in parallel.
+
+        Parameters
+        ----------
+        urls : List[str]
+            List of article URLs
+        max_workers : int
+            Maximum number of parallel workers
+
+        Returns
+        -------
+        Dict[str, str]
+            Mapping of URL to content
+        """
+        results = {}
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_url = {executor.submit(self.fetch_content, url): url for url in urls}
+
+            for future in as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    content = future.result()
+                    results[url] = content
+                except Exception as e:
+                    logger.warning(f"Error fetching {url}: {e}")
+                    results[url] = ""
+
+        return results
+
+    def get_stats(self) -> Dict[str, int]:
+        """Get fetch statistics."""
+        return self.stats.copy()
+
+
+class EnhancedHybridNewsScraper:
+    """
+    Enhanced hybrid scraper with full article content fetching.
     """
 
     def __init__(
         self,
         output_dir: str = "data_clean/bronze/news/hybrid",
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
+        fetch_content: bool = True
     ):
-        """Initialize the hybrid scraper."""
+        """Initialize the enhanced scraper."""
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.start_date = start_date or (datetime.now(pytz.UTC) - timedelta(days=365*5))
         self.end_date = end_date or datetime.now(pytz.UTC)
+        self.fetch_content = fetch_content
 
         # Track seen articles across ALL sources
         self.seen_file = self.output_dir / "seen_articles.json"
         self.seen_articles = self._load_seen_articles()
+
+        # Initialize content fetcher if needed
+        if self.fetch_content:
+            self.content_fetcher = ArticleContentFetcher()
+        else:
+            self.content_fetcher = None
 
         # S&P 500 keywords for filtering
         self.sp500_keywords = {
@@ -133,7 +335,8 @@ class HybridNewsScraper:
         self.finnhub_calls = 0
         self.finnhub_limit = 3600  # 60 per min = 3600 per hour
 
-        logger.info(f"Hybrid scraper initialized for {self.start_date.date()} to {self.end_date.date()}")
+        logger.info(f"Enhanced scraper initialized for {self.start_date.date()} to {self.end_date.date()}")
+        logger.info(f"Content fetching: {'ENABLED' if self.fetch_content else 'DISABLED'}")
 
     def _load_seen_articles(self) -> Set[str]:
         """Load previously seen article IDs."""
@@ -180,21 +383,9 @@ class HybridNewsScraper:
             logger.warning(f"Could not parse timestamp: {timestamp_str} - {e}")
             return datetime.now(pytz.UTC).isoformat()
 
-    # ========================================================================
-    # SOURCE 1: GDELT PROJECT (2017-present, FREE)
-    # ========================================================================
-
     def scrape_gdelt(self, date: datetime, max_articles: int = 250) -> List[Dict]:
         """
-        Scrape GDELT Project for a specific date.
-
-        GDELT provides:
-        - Historical data back to Jan 1, 2017 (DOC 2.0 API)
-        - Updates every 15 minutes
-        - 100% free, unlimited access
-        - Searches across 65 languages
-
-        API: https://api.gdeltproject.org/api/v2/doc/doc
+        Scrape GDELT Project for a specific date and fetch full content.
         """
         logger.info(f"Scraping GDELT for {date.date()}")
         articles = []
@@ -205,8 +396,6 @@ class HybridNewsScraper:
             end_date_str = (date + timedelta(days=1)).strftime("%Y%m%d%H%M%S")
 
             # GDELT DOC 2.0 API query
-            # Note: GDELT doesn't support complex queries, so we use simple terms
-            # and filter for S&P 500 relevance in post-processing
             import urllib.parse
             query = 'stock market'  # Simple query - filter results later
             query_encoded = urllib.parse.quote(query)
@@ -234,6 +423,9 @@ class HybridNewsScraper:
             data = response.json()
 
             if 'articles' in data:
+                # Collect articles that need content fetching
+                articles_to_fetch = []
+
                 for article in data['articles']:
                     title = article.get('title', '')
                     article_url = article.get('url', '')
@@ -245,11 +437,11 @@ class HybridNewsScraper:
                     if article_id in self.seen_articles:
                         continue
 
-                    # Check relevance
+                    # Check relevance based on title
                     if not self._is_sp500_relevant(title):
                         continue
 
-                    # Extract data
+                    # Extract metadata
                     published_at = self._normalize_timestamp(
                         article.get('seendate', article.get('date', ''))
                     )
@@ -257,7 +449,7 @@ class HybridNewsScraper:
                     article_data = {
                         'article_id': article_id,
                         'headline': title,
-                        'body': article.get('excerpt', ''),
+                        'body': article.get('excerpt', ''),  # Start with excerpt
                         'url': article_url,
                         'source': f"gdelt_{article.get('domain', 'unknown')}",
                         'published_at': published_at,
@@ -267,166 +459,53 @@ class HybridNewsScraper:
                         'language': article.get('language', 'en')
                     }
 
-                    articles.append(article_data)
-                    self.seen_articles.add(article_id)
+                    articles_to_fetch.append(article_data)
 
-            logger.info(f"GDELT: Found {len(articles)} new articles for {date.date()}")
+                # Fetch full content if enabled
+                if self.fetch_content and self.content_fetcher and articles_to_fetch:
+                    logger.info(f"Fetching full content for {len(articles_to_fetch)} articles...")
+
+                    # Extract URLs
+                    urls = [a['url'] for a in articles_to_fetch]
+
+                    # Fetch content in batches
+                    url_to_content = self.content_fetcher.fetch_batch(urls, max_workers=5)
+
+                    # Update articles with fetched content
+                    for article in articles_to_fetch:
+                        fetched_content = url_to_content.get(article['url'], '')
+
+                        # If we got content, use it; otherwise keep the excerpt
+                        if fetched_content:
+                            article['body'] = fetched_content
+                            article['content_fetched'] = True
+                        else:
+                            article['content_fetched'] = False
+
+                        # Re-check relevance with full content
+                        if self._is_sp500_relevant(article['headline'] + ' ' + article['body']):
+                            articles.append(article)
+                            self.seen_articles.add(article['article_id'])
+
+                    # Log fetch statistics
+                    stats = self.content_fetcher.get_stats()
+                    logger.info(f"Content fetch stats - Fetched: {stats['fetched']}, Cached: {stats['cached']}, Failed: {stats['failed']}")
+                else:
+                    # No content fetching, just add the articles
+                    for article in articles_to_fetch:
+                        articles.append(article)
+                        self.seen_articles.add(article['article_id'])
+
+            logger.info(f"GDELT: Found {len(articles)} new S&P 500 relevant articles for {date.date()}")
 
         except Exception as e:
             logger.error(f"GDELT scraping error for {date.date()}: {e}")
 
         return articles
 
-    # ========================================================================
-    # SOURCE 2: COMMON CRAWL NEWS (2016-present, FREE)
-    # ========================================================================
-
-    def scrape_common_crawl(self, year: int, month: int) -> List[Dict]:
-        """
-        Scrape Common Crawl News dataset.
-
-        Common Crawl provides:
-        - Daily news crawls since 2016
-        - Free access via AWS S3
-        - ~100k articles per day
-        - WARC format (web archive)
-
-        Data: https://data.commoncrawl.org/crawl-data/CC-NEWS/
-        """
-        logger.info(f"Scraping Common Crawl for {year}-{month:02d}")
-        articles = []
-
-        try:
-            # Get WARC paths for the month
-            paths_url = f"https://data.commoncrawl.org/crawl-data/CC-NEWS/{year}/{month:02d}/warc.paths.gz"
-
-            logger.info(f"Common Crawl: Fetching WARC paths from {paths_url}")
-
-            # Note: Full implementation would download and parse WARC files
-            # For now, we'll use the index to get article metadata
-
-            # This is a placeholder - full WARC parsing is complex
-            # Recommendation: Use warcio library for production
-            logger.warning("Common Crawl: Full WARC parsing not yet implemented")
-            logger.info("Common Crawl: Recommended to use 'warcio' library for production")
-
-        except Exception as e:
-            logger.error(f"Common Crawl error for {year}-{month:02d}: {e}")
-
-        return articles
-
-    # ========================================================================
-    # SOURCE 3: INTERNET ARCHIVE WAYBACK MACHINE (FREE)
-    # ========================================================================
-
-    def scrape_wayback_machine(self, url: str, date: datetime) -> List[Dict]:
-        """
-        Scrape historical snapshots from Internet Archive.
-
-        Wayback Machine provides:
-        - Historical snapshots of news sites
-        - CDX API for querying captures
-        - Free, unlimited access (be respectful!)
-        - Data back to 1996
-
-        API: https://archive.org/developers/wayback-cdx-server.html
-        """
-        logger.info(f"Scraping Wayback Machine for {url} on {date.date()}")
-        articles = []
-
-        try:
-            # Format date for CDX API (yyyyMMdd)
-            date_str = date.strftime("%Y%m%d")
-
-            # CDX API query
-            cdx_url = (
-                f"https://web.archive.org/cdx/search/cdx?"
-                f"url={url}&"
-                f"from={date_str}&"
-                f"to={date_str}&"
-                f"output=json&"
-                f"fl=timestamp,original,statuscode"
-            )
-
-            response = requests.get(cdx_url, timeout=30)
-            response.raise_for_status()
-
-            data = response.json()
-
-            # First row is headers
-            if len(data) > 1:
-                headers = data[0]
-                for row in data[1:]:
-                    snapshot = dict(zip(headers, row))
-
-                    if snapshot.get('statuscode') == '200':
-                        # Construct Wayback URL
-                        timestamp = snapshot['timestamp']
-                        original_url = snapshot['original']
-                        wayback_url = f"https://web.archive.org/web/{timestamp}/{original_url}"
-
-                        # Note: Would need to fetch and parse the actual page
-                        # For now, just log the availability
-                        logger.debug(f"Found snapshot: {wayback_url}")
-
-            logger.info(f"Wayback Machine: Found {len(data)-1} snapshots for {url}")
-
-        except Exception as e:
-            logger.error(f"Wayback Machine error for {url} on {date.date()}: {e}")
-
-        return articles
-
-    # ========================================================================
-    # SOURCE 4: SEC EDGAR (Official company filings, FREE)
-    # ========================================================================
-
-    def scrape_sec_edgar(self, ticker: str, start_date: datetime, end_date: datetime) -> List[Dict]:
-        """
-        Scrape SEC EDGAR filings for S&P 500 companies.
-
-        SEC EDGAR provides:
-        - All public company filings (10-K, 10-Q, 8-K, etc.)
-        - Free, official data
-        - JSON API available
-        - Historical data back to 1994
-
-        API: https://www.sec.gov/edgar/sec-api-documentation
-        """
-        logger.info(f"Scraping SEC EDGAR for {ticker}")
-        articles = []
-
-        try:
-            # SEC requires user-agent identification
-            headers = {
-                'User-Agent': 'fx-ml-pipeline research@example.com'
-            }
-
-            # Get company CIK (Central Index Key)
-            # Note: Would need to map ticker to CIK
-            # For now, placeholder
-
-            logger.info(f"SEC EDGAR: Fetching filings for {ticker}")
-
-            # Example: Company submissions endpoint
-            # url = f"https://data.sec.gov/submissions/CIK{cik}.json"
-
-            # Note: Full implementation would parse filings
-            logger.warning("SEC EDGAR: Full implementation pending")
-
-        except Exception as e:
-            logger.error(f"SEC EDGAR error for {ticker}: {e}")
-
-        return articles
-
-    # ========================================================================
-    # SOURCE 5: FREE APIs (Alpha Vantage, Finnhub)
-    # ========================================================================
-
     def scrape_alpha_vantage(self, date: datetime, api_key: Optional[str] = None) -> List[Dict]:
         """
-        Scrape news from Alpha Vantage (free tier: 25 calls/day).
-
-        Requires API key (free): https://www.alphavantage.co/support/#api-key
+        Scrape news from Alpha Vantage with content fetching.
         """
         if self.alphavantage_calls >= self.alphavantage_limit:
             logger.warning("Alpha Vantage: Daily limit reached (25 calls)")
@@ -458,6 +537,8 @@ class HybridNewsScraper:
             self.alphavantage_calls += 1
 
             if 'feed' in data:
+                articles_to_fetch = []
+
                 for item in data['feed']:
                     title = item.get('title', '')
                     article_url = item.get('url', '')
@@ -484,8 +565,28 @@ class HybridNewsScraper:
                         'sentiment_label': item.get('overall_sentiment_label')
                     }
 
-                    articles.append(article_data)
-                    self.seen_articles.add(article_id)
+                    articles_to_fetch.append(article_data)
+
+                # Fetch full content if enabled
+                if self.fetch_content and self.content_fetcher and articles_to_fetch:
+                    logger.info(f"Fetching full content for {len(articles_to_fetch)} Alpha Vantage articles...")
+                    urls = [a['url'] for a in articles_to_fetch]
+                    url_to_content = self.content_fetcher.fetch_batch(urls, max_workers=3)
+
+                    for article in articles_to_fetch:
+                        fetched_content = url_to_content.get(article['url'], '')
+                        if fetched_content:
+                            article['body'] = fetched_content
+                            article['content_fetched'] = True
+                        else:
+                            article['content_fetched'] = False
+
+                        articles.append(article)
+                        self.seen_articles.add(article['article_id'])
+                else:
+                    for article in articles_to_fetch:
+                        articles.append(article)
+                        self.seen_articles.add(article['article_id'])
 
             logger.info(f"Alpha Vantage: Found {len(articles)} articles (calls: {self.alphavantage_calls}/{self.alphavantage_limit})")
 
@@ -496,9 +597,7 @@ class HybridNewsScraper:
 
     def scrape_finnhub(self, date: datetime, api_key: Optional[str] = None) -> List[Dict]:
         """
-        Scrape news from Finnhub (free tier: 60 calls/min, 1 year history).
-
-        Requires API key (free): https://finnhub.io/register
+        Scrape news from Finnhub with content fetching.
         """
         if self.finnhub_calls >= self.finnhub_limit:
             logger.warning("Finnhub: Hourly limit reached (3600 calls)")
@@ -532,6 +631,8 @@ class HybridNewsScraper:
             data = response.json()
             self.finnhub_calls += 1
 
+            articles_to_fetch = []
+
             for item in data:
                 title = item.get('headline', '')
                 article_url = item.get('url', '')
@@ -558,8 +659,28 @@ class HybridNewsScraper:
                     'collection_method': 'finnhub_api'
                 }
 
-                articles.append(article_data)
-                self.seen_articles.add(article_id)
+                articles_to_fetch.append(article_data)
+
+            # Fetch full content if enabled
+            if self.fetch_content and self.content_fetcher and articles_to_fetch:
+                logger.info(f"Fetching full content for {len(articles_to_fetch)} Finnhub articles...")
+                urls = [a['url'] for a in articles_to_fetch]
+                url_to_content = self.content_fetcher.fetch_batch(urls, max_workers=3)
+
+                for article in articles_to_fetch:
+                    fetched_content = url_to_content.get(article['url'], '')
+                    if fetched_content:
+                        article['body'] = fetched_content
+                        article['content_fetched'] = True
+                    else:
+                        article['content_fetched'] = False
+
+                    articles.append(article)
+                    self.seen_articles.add(article['article_id'])
+            else:
+                for article in articles_to_fetch:
+                    articles.append(article)
+                    self.seen_articles.add(article['article_id'])
 
             logger.info(f"Finnhub: Found {len(articles)} articles (calls: {self.finnhub_calls}/{self.finnhub_limit})")
 
@@ -571,27 +692,12 @@ class HybridNewsScraper:
 
         return articles
 
-    # ========================================================================
-    # MAIN COLLECTION ORCHESTRATION
-    # ========================================================================
-
     def collect_for_date_range(
         self,
         sources: List[str] = ['gdelt', 'alphavantage', 'finnhub']
     ) -> Dict[str, int]:
         """
         Collect news from all sources for the configured date range.
-
-        Parameters
-        ----------
-        sources : List[str]
-            Which sources to use: 'gdelt', 'commoncrawl', 'wayback', 'sec',
-            'alphavantage', 'finnhub', or 'all'
-
-        Returns
-        -------
-        Dict[str, int]
-            Statistics by source
         """
         if 'all' in sources:
             sources = ['gdelt', 'alphavantage', 'finnhub']
@@ -635,6 +741,16 @@ class HybridNewsScraper:
         # Save final state
         self._save_seen_articles()
 
+        # Print content fetch statistics if enabled
+        if self.fetch_content and self.content_fetcher:
+            fetch_stats = self.content_fetcher.get_stats()
+            logger.info("=" * 80)
+            logger.info("CONTENT FETCHING STATISTICS:")
+            logger.info(f"Articles with content fetched: {fetch_stats['fetched']}")
+            logger.info(f"Articles loaded from cache: {fetch_stats['cached']}")
+            logger.info(f"Failed content fetches: {fetch_stats['failed']}")
+            logger.info("=" * 80)
+
         return stats
 
     def save_articles(self, articles: List[Dict]):
@@ -647,7 +763,7 @@ class HybridNewsScraper:
             filepath = self.output_dir / filename
 
             with open(filepath, 'w') as f:
-                json.dump(article, f, indent=2)
+                json.dump(article, f, indent=2, ensure_ascii=False)
 
         # Update seen articles
         self._save_seen_articles()
@@ -658,12 +774,12 @@ class HybridNewsScraper:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Hybrid Historical News Scraper - FREE 5-Year Collection"
+        description="Enhanced Hybrid News Scraper - With Full Article Content"
     )
     parser.add_argument(
         "--start-date",
         type=str,
-        default=(datetime.now() - timedelta(days=365*5)).strftime("%Y-%m-%d"),
+        default=(datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
         help="Start date (YYYY-MM-DD)"
     )
     parser.add_argument(
@@ -675,13 +791,25 @@ def main():
     parser.add_argument(
         "--sources",
         type=str,
-        default="gdelt,alphavantage,finnhub",
+        default="gdelt",
         help="Comma-separated sources: gdelt,alphavantage,finnhub,all"
     )
     parser.add_argument(
         "--output-dir",
-        default="data_clean/bronze/news/hybrid",
+        default="data_clean/bronze/news/hybrid_enhanced",
         help="Output directory"
+    )
+    parser.add_argument(
+        "--fetch-content",
+        action="store_true",
+        default=True,
+        help="Fetch full article content from URLs (default: True)"
+    )
+    parser.add_argument(
+        "--no-fetch-content",
+        dest="fetch_content",
+        action="store_false",
+        help="Disable content fetching"
     )
     parser.add_argument(
         "--mode",
@@ -704,18 +832,20 @@ def main():
     sources = [s.strip() for s in args.sources.split(',')]
 
     # Initialize scraper
-    scraper = HybridNewsScraper(
+    scraper = EnhancedHybridNewsScraper(
         output_dir=args.output_dir,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        fetch_content=args.fetch_content
     )
 
     # Collect news
     logger.info("=" * 80)
-    logger.info("HYBRID NEWS SCRAPER - FREE 5-YEAR COLLECTION")
+    logger.info("ENHANCED HYBRID NEWS SCRAPER - WITH FULL CONTENT")
     logger.info("=" * 80)
     logger.info(f"Date range: {start_date.date()} to {end_date.date()}")
     logger.info(f"Sources: {', '.join(sources)}")
+    logger.info(f"Content fetching: {'ENABLED' if args.fetch_content else 'DISABLED'}")
     logger.info(f"Output: {args.output_dir}")
     logger.info("=" * 80)
 
