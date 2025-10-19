@@ -177,15 +177,17 @@ News Simulator → Bronze → Silver → Gold → Model → Inference → Monito
 # Activate virtual environment
 source .venv/bin/activate
 
-# Collect 8 years of S&P 500 news from GDELT Project (2017-2025)
-# Enhanced version fetches FULL article content (not just metadata)
-python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \
-    --start-date 2017-01-01 \
+# Collect 5 years of S&P 500 news from GDELT Project (2020-2025)
+# Production scraper with 429 error handling and full content fetching
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+    --start-date 2020-10-19 \
     --end-date 2025-10-19 \
     --sources gdelt \
-    --fetch-content
+    --fetch-content \
+    --max-workers 1 \
+    --delay-between-requests 2.0
 
-# ⏱️ Grab a coffee - this takes 1-3 hours
+# ⏱️ Takes 1-2 weeks with conservative settings (avoids 429 errors)
 # 📊 Expected: 50,000-100,000 articles with full text
 # 💰 Cost: $0
 # 📁 Saved to: data_clean/bronze/news/hybrid/*.json
@@ -194,11 +196,12 @@ python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \
 **What happens:**
 - Connects to GDELT Project API (free, unlimited)
 - Filters for S&P 500 relevant articles using expanded keywords
-- Fetches full article content from original URLs (not just metadata)
+- Fetches full article content from original URLs with 429 error handling
+- Implements exponential backoff and per-domain rate limiting
 - Downloads from 40+ news sources (Yahoo Finance, Reuters, Bloomberg, etc.)
 - Automatically deduplicates articles
-- Caches content to avoid re-fetching
-- Tracks progress in `seen_articles.json`
+- Caches content for 7 days to avoid re-fetching
+- Tracks progress in `seen_articles.json` (can resume if interrupted)
 
 ### Step 2: Process Sentiment Features (2-5 minutes)
 ```bash
@@ -250,11 +253,13 @@ echo "ALPHAVANTAGE_KEY=your_key_here" >> .env
 echo "FINNHUB_KEY=your_key_here" >> .env
 
 # 3. Collect from all sources:
-python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
     --start-date 2024-10-19 \
     --end-date 2025-10-19 \
     --sources all \
-    --fetch-content
+    --fetch-content \
+    --max-workers 2 \
+    --delay-between-requests 1.0
 
 # Collects from:
 # - GDELT Project (unlimited, free)
@@ -271,7 +276,7 @@ python src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py \
 crontab -e
 
 # Add this line (runs at 1 AM daily):
-0 1 * * * cd /path/to/fx-ml-pipeline && source .venv/bin/activate && python3 src_clean/data_pipelines/bronze/hybrid_news_scraper_enhanced.py --mode incremental --sources all --fetch-content >> logs/news_scraper.log 2>&1
+0 1 * * * cd /path/to/fx-ml-pipeline && source .venv/bin/activate && python3 src_clean/data_pipelines/bronze/hybrid_news_scraper.py --mode incremental --sources all --fetch-content --max-workers 1 --delay-between-requests 2.0 >> logs/news_scraper.log 2>&1
 
 # Collects 100-500 new articles daily for free
 ```
