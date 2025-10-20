@@ -35,6 +35,7 @@ data/news/silver/
 
 # New clean data structure (exclude large files)
 data_clean/bronze/market/*.ndjson
+data_clean/bronze/news/
 data_clean/silver/**/*.csv
 data_clean/gold/**/*.csv
 data_clean/gold/**/*.parquet
@@ -62,3 +63,4 @@ airflow_logs/
 data_clean/*.zip
 *.zip
 *.db
+data_clean_5year/
