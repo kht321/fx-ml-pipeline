@@ -77,6 +77,7 @@ class PipelineOrchestrator:
         self.silver_sentiment = output_dir / f"silver/news/sentiment/{instrument}_sentiment.csv"
 
         self.gold_market = output_dir / f"gold/market/features/{instrument}_features.csv"
+        self.gold_news_signals = output_dir / f"gold/news/signals/{instrument}_news_signals.csv"
         self.gold_labels = output_dir / f"gold/market/labels/{instrument}_labels_{prediction_horizon}min.csv"
 
         self.model_dir = output_dir / "models"
@@ -189,10 +190,30 @@ class PipelineOrchestrator:
 
         return success
 
+    def build_gold_news(self) -> bool:
+        """Build gold layer news signals using FinBERT."""
+        logger.info("\n" + "="*80)
+        logger.info("STAGE 4: SILVER → GOLD (NEWS)")
+        logger.info("="*80)
+
+        success = self.run_command(
+            [
+                sys.executable,
+                "src_clean/data_pipelines/gold/news_signal_builder.py",
+                "--silver-sentiment", str(self.silver_sentiment),
+                "--bronze-news", str(self.bronze_news),
+                "--output", str(self.gold_news_signals),
+                "--window", "60"
+            ],
+            "News Trading Signals (FinBERT)"
+        )
+
+        return success
+
     def generate_labels(self) -> bool:
         """Generate prediction labels."""
         logger.info("\n" + "="*80)
-        logger.info("STAGE 4: GENERATE LABELS")
+        logger.info("STAGE 5: GENERATE LABELS")
         logger.info("="*80)
 
         success = self.run_command(
@@ -211,7 +232,7 @@ class PipelineOrchestrator:
     def train_model(self) -> bool:
         """Train XGBoost model."""
         logger.info("\n" + "="*80)
-        logger.info("STAGE 5: TRAIN MODEL")
+        logger.info("STAGE 6: TRAIN MODEL")
         logger.info("="*80)
 
         success = self.run_command(
@@ -244,8 +265,11 @@ class PipelineOrchestrator:
             return False
 
         # Stage 2: News silver (optional)
+        news_available = False
         if not skip_news and self.bronze_news.exists():
-            if not self.process_silver_news():
+            if self.process_silver_news():
+                news_available = True
+            else:
                 logger.warning("News processing failed, continuing without news features")
 
         # Stage 3: Market gold
@@ -253,12 +277,17 @@ class PipelineOrchestrator:
             logger.error("Pipeline failed at market gold stage")
             return False
 
-        # Stage 4: Labels
+        # Stage 4: News gold (optional, requires silver news)
+        if news_available:
+            if not self.build_gold_news():
+                logger.warning("News gold layer failed, continuing without news signals")
+
+        # Stage 5: Labels
         if not self.generate_labels():
             logger.error("Pipeline failed at label generation stage")
             return False
 
-        # Stage 5: Training (optional)
+        # Stage 6: Training (optional)
         if not skip_training:
             if not self.train_model():
                 logger.error("Pipeline failed at training stage")

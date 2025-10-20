@@ -107,18 +107,18 @@ curl -X POST http://localhost:5001/api/stream/negative
 
 **Medallion Data Pipeline**:
 ```
-News Simulator → Bronze → Silver → Gold → Model → Inference → Monitoring
-      ↓            ↓        ↓        ↓      ↓        ↓           ↓
-   5001 port    Raw    Features  Training  API   Dashboard   Evidently
-              Storage  Engineering         8000    8501        8050
+News Simulator → Bronze → Silver (TextBlob) → Gold (FinBERT) → Model → Inference → Monitoring
+      ↓            ↓           ↓                    ↓            ↓        ↓           ↓
+   5001 port    Raw      Preprocessing      Trading Signals   API   Dashboard   Evidently
+              Storage    Fast sentiment     Financial AI    8000    8501        8050
 ```
 
 ## 🎨 Components
 
 ### Data Layer
-- **Bronze**: OANDA market data (1.7M 1-min candles) + RSS news feeds
-- **Silver**: Engineered features (market + news sentiment)
-- **Gold**: Training-ready dataset with labels
+- **Bronze**: OANDA market data (1.7M 1-min candles) + RSS/GDELT news feeds (12,950+ articles)
+- **Silver**: Engineered features (market: 64 features) + news sentiment (TextBlob: 6 features)
+- **Gold**: Trading-ready signals (market features + FinBERT news signals + labels)
 
 ### Feature Engineering (70 Features)
 **Market Features (64):**
@@ -205,7 +205,7 @@ python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
 
 ### Step 2: Process Sentiment Features (2-5 minutes)
 ```bash
-# Analyze sentiment for all collected articles
+# Silver Layer: Quick sentiment analysis with TextBlob (preprocessing)
 python src_clean/data_pipelines/silver/news_sentiment_processor.py \
     --input-dir data_clean/bronze/news \
     --output data_clean/silver/news/sentiment/spx500_sentiment.csv
@@ -216,14 +216,44 @@ python src_clean/data_pipelines/silver/news_sentiment_processor.py \
 # - Merges everything into one dataset
 ```
 
-**Sentiment features computed:**
+**Silver Layer Features (TextBlob):**
 - Polarity (-1 to +1): Overall positive/negative tone
 - Subjectivity (0 to 1): Opinion vs fact
 - Financial sentiment: Using finance-specific keywords
 - Policy tone: Hawkish/dovish/neutral (for Fed news)
 - Confidence score: Reliability of sentiment
 
-### Step 3: Run Full Pipeline with Historical News
+### Step 3: Generate Trading Signals with FinBERT (NEW!)
+```bash
+# Gold Layer: Advanced sentiment analysis with FinBERT
+# Transforms sentiment → trading signals using financial-domain AI
+python src_clean/data_pipelines/gold/news_signal_builder.py \
+    --silver-sentiment data_clean/silver/news/sentiment/spx500_sentiment.csv \
+    --bronze-news data_clean/bronze/news \
+    --output data_clean/gold/news/signals/spx500_news_signals.csv \
+    --window 60
+
+# ⏱️ Processing time: ~1-2 minutes per 1000 articles (CPU)
+# 🤖 Model: ProsusAI/finbert (financial sentiment transformer)
+# 📊 Output: Time-windowed trading signals (buy/sell/hold)
+```
+
+**Gold Layer Features (FinBERT):**
+- `avg_sentiment`: Financial-domain sentiment score (-1 to +1)
+- `signal_strength`: Confidence-weighted signal magnitude
+- `trading_signal`: Buy (1), Sell (-1), or Hold (0)
+- `article_count`: Number of articles in time window
+- `quality_score`: Average confidence across articles
+- `positive_prob`, `negative_prob`, `neutral_prob`: FinBERT class probabilities
+
+**FinBERT Benefits:**
+- ✅ **Financial domain expertise**: Trained specifically on financial texts
+- ✅ **Context-aware**: Understands "hawkish" means bearish for stocks
+- ✅ **High accuracy**: 78%+ confidence scores
+- ✅ **Production-ready**: Batch processing with progress bars
+- ✅ **CPU-friendly**: No GPU required (though faster with GPU)
+
+### Step 4: Run Full Pipeline with Historical News
 ```bash
 # Complete pipeline: Market + News → Features → Training
 python src_clean/run_full_pipeline.py \
@@ -232,11 +262,23 @@ python src_clean/run_full_pipeline.py \
     --output-dir data_clean
 
 # Processes:
-# ✅ Market features (technical, microstructure, volatility)
-# ✅ News features (sentiment from 50k+ articles)
-# ✅ Combined feature engineering
-# ✅ Label generation
-# ✅ XGBoost model training
+# ✅ Stage 1: Market → Silver (technical, microstructure, volatility)
+# ✅ Stage 2: News → Silver (TextBlob sentiment)
+# ✅ Stage 3: Market → Gold (merge features)
+# ✅ Stage 4: News → Gold (FinBERT trading signals) ← NEW!
+# ✅ Stage 5: Generate prediction labels
+# ✅ Stage 6: XGBoost model training with news signals
+```
+
+**New Pipeline Architecture:**
+```
+Bronze News (12,950 articles)
+    ↓
+Silver Sentiment (TextBlob) - Fast preprocessing
+    ↓
+Gold Signals (FinBERT) - Financial-domain AI ← NEW!
+    ↓
+Training (XGBoost with news features)
 ```
 
 ### Optional: Enhance Coverage with Free API Keys

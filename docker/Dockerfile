@@ -36,6 +36,15 @@ COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
+# Pre-download FinBERT model to reduce first-run latency
+# This adds ~440MB to the image but eliminates runtime download wait
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+    print('Downloading FinBERT model...'); \
+    AutoTokenizer.from_pretrained('ProsusAI/finbert'); \
+    AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert'); \
+    print('FinBERT model cached successfully')" || \
+    echo "Warning: FinBERT pre-download failed, will download at runtime"
+
 # ============================================================================
 # Stage 3: Development Image (with dev tools)
 # ============================================================================
