@@ -47,6 +47,9 @@ data_clean/training_outputs/
 outputs/
 *.csv
 *.pkl
+!data_clean_5year/models/*.pkl
+!data_clean_5year/models/*.csv
+!data_clean_5year/models/*.png
 *.joblib
 
 # OS files
@@ -63,4 +66,8 @@ airflow_logs/
 data_clean/*.zip
 *.zip
 *.db
-data_clean_5year/
+# Exclude 5-year test outputs except models
+data_clean_5year/bronze/
+data_clean_5year/silver/
+data_clean_5year/gold/
+data_clean_5year/training_outputs/
