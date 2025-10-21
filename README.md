@@ -24,8 +24,7 @@ docker-compose up -d
 # View running services
 docker-compose ps
 
-# See detailed docs
-cat DOCKER_STRUCTURE.md
+
 ```
 
 **Services included:**
@@ -35,7 +34,7 @@ cat DOCKER_STRUCTURE.md
 - **UI**: Streamlit dashboard
 - **Infrastructure**: PostgreSQL, Redis, Nginx load balancer
 
-> **Note**: Clean Docker structure with organized subdirectories - see [DOCKER_STRUCTURE.md](DOCKER_STRUCTURE.md) for complete documentation.
+> **Note**: Clean Docker structure with organized subdirectories.
 
 ## 🚀 Quick Demo (5 minutes)
 
@@ -199,7 +198,7 @@ News Simulator → Bronze → Silver (TextBlob) → Gold (FinBERT) → Model →
 | **Model Servers** | 8001/8002 | Blue/Green deployments | http://localhost:8088 (via Nginx) |
 | **Feast** | 6566 | Feature store API | http://localhost:6566 |
 
-> **Docker**: All services available via unified `docker-compose.yml` - see [DOCKER_STRUCTURE.md](DOCKER_STRUCTURE.md)
+> **Docker**: All services available via unified `docker-compose.yml` 
 
 **Note**: When running locally (non-Docker), MLflow uses port 5002 to avoid conflict with macOS AirPlay Receiver.
 
