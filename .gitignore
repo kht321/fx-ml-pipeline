@@ -10,6 +10,9 @@ __pycache__/
 dist/
 build/
 
+# Archive folder (old/deprecated code)
+archive/
+
 # Documentation (keep local only)
 docs/
 *.txt
