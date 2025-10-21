@@ -6,6 +6,37 @@ End-to-end machine learning pipeline for S&P 500 price prediction using technica
 
 ✅ **Production Ready** - Full pipeline operational with Python 3.11
 
+## 🐳 Docker Quick Start
+
+**New unified Docker structure** - All services in one `docker-compose.yml` at project root!
+
+```bash
+# Start entire MLOps stack
+docker-compose up -d
+
+# Access services:
+# - Airflow: http://localhost:8080 (admin/admin)
+# - MLflow: http://localhost:5000
+# - FastAPI: http://localhost:8000/docs
+# - Streamlit: http://localhost:8501
+# - Evidently: http://localhost:8050
+
+# View running services
+docker-compose ps
+
+# See detailed docs
+cat DOCKER_STRUCTURE.md
+```
+
+**Services included:**
+- **Orchestration**: Airflow 2.10.6 with custom task images (ETL, Trainer, DQ)
+- **MLOps**: MLflow (tracking), Feast (features), Evidently (monitoring)
+- **APIs**: FastAPI backend, Model servers (blue/green deployment)
+- **UI**: Streamlit dashboard
+- **Infrastructure**: PostgreSQL, Redis, Nginx load balancer
+
+> **Note**: Clean Docker structure with organized subdirectories - see [DOCKER_STRUCTURE.md](DOCKER_STRUCTURE.md) for complete documentation.
+
 ## 🚀 Quick Demo (5 minutes)
 
 ### Prerequisites
@@ -161,12 +192,16 @@ News Simulator → Bronze → Silver (TextBlob) → Gold (FinBERT) → Model →
 |---------|------|-------------|--------|
 | **Streamlit** | 8501 | Interactive ML dashboard | http://localhost:8501 |
 | **FastAPI** | 8000 | REST API + WebSocket | http://localhost:8000/docs |
-| **MLflow** | 5002 | Experiment tracking | http://localhost:5002 |
-| **Airflow** | 8080 | Workflow orchestration (Airflow 2.10.3) | http://localhost:8080 (admin/admin) |
+| **MLflow** | 5000 | Experiment tracking | http://localhost:5000 |
+| **Airflow** | 8080 | Workflow orchestration (Airflow 2.10.6) | http://localhost:8080 (admin/admin) |
 | **Evidently** | 8050 | Model monitoring | http://localhost:8050 |
 | **News Simulator** | 5001 | Test data generator | http://localhost:5001 |
+| **Model Servers** | 8001/8002 | Blue/Green deployments | http://localhost:8088 (via Nginx) |
+| **Feast** | 6566 | Feature store API | http://localhost:6566 |
 
-**Note**: MLflow uses port 5002 (not 5000) to avoid conflict with macOS AirPlay Receiver.
+> **Docker**: All services available via unified `docker-compose.yml` - see [DOCKER_STRUCTURE.md](DOCKER_STRUCTURE.md)
+
+**Note**: When running locally (non-Docker), MLflow uses port 5002 to avoid conflict with macOS AirPlay Receiver.
 
 ## 📰 Historical News Collection Demo (5+ Years for FREE)
 
@@ -447,12 +482,24 @@ curl -X POST http://localhost:8050/generate
 
 ### 6. Full Stack Demo
 ```bash
-# Launch all services
-cd docker
-docker compose -f docker-compose.full-stack.yml up -d
+# Launch all services (unified docker-compose at root)
+docker-compose up -d
+
+# Or start specific service groups:
+# MLOps stack only
+docker-compose up -d postgres redis mlflow feast
+
+# Airflow orchestration
+docker-compose up -d airflow-postgres airflow-webserver airflow-scheduler
+
+# API & UI
+docker-compose up -d fastapi streamlit
+
+# Model servers with load balancer
+docker-compose up -d model-blue model-green nginx
 
 # Verify all services healthy
-docker compose -f docker-compose.full-stack.yml ps
+docker-compose ps
 
 # Access all UIs (see Services table above)
 ```
@@ -489,11 +536,18 @@ fx-ml-pipeline/
 │   │   └── xgboost_training_pipeline_mlflow.py
 │   └── utils/                   # Shared utilities
 │
+├── docker-compose.yml           # Unified Docker orchestration (root)
 ├── docker/                      # Docker configurations
-│   ├── Dockerfile.fastapi
-│   ├── Dockerfile.streamlit
-│   ├── docker-compose.yml
-│   └── docker-compose.full-stack.yml
+│   ├── api/                     # FastAPI Dockerfile
+│   ├── ui/                      # Streamlit Dockerfile
+│   ├── airflow/                 # Airflow Dockerfile
+│   ├── tasks/                   # Airflow task images
+│   │   ├── etl/                 # Data pipeline tasks
+│   │   ├── trainer/             # Model training tasks
+│   │   ├── dq/                  # Data quality checks
+│   │   └── model-server/        # Inference servers
+│   ├── monitoring/              # Evidently monitoring
+│   └── tools/                   # Utilities (news-simulator)
 │
 ├── data_clean/                  # Medallion data architecture
 │   ├── bronze/                  # Raw data
@@ -551,11 +605,19 @@ To disable AirPlay Receiver (optional):
 ### Docker Issues
 ```bash
 # Restart containers
-cd docker
-docker compose -f docker-compose.full-stack.yml restart
+docker-compose restart
 
 # View logs
-docker compose -f docker-compose.full-stack.yml logs -f <service>
+docker-compose logs -f <service>
+
+# Rebuild specific service
+docker-compose build <service>
+
+# Start fresh (removes volumes)
+docker-compose down -v
+docker-compose up -d
+
+# See detailed structure: DOCKER_STRUCTURE.md
 ```
 
 ## 📝 License
