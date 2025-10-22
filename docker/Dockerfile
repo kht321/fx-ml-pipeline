@@ -4,7 +4,7 @@
 # ============================================================================
 # Stage 1: Base Image with System Dependencies
 # ============================================================================
-FROM python:3.9-slim as base
+FROM python:3.11-slim as base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -35,6 +35,59 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
+
+
+# ============================================================================
+# Stage Experiment
+# ============================================================================
+FROM nvidia/cuda:12.1-devel-ubuntu22.04 as gpu-base
+
+# Install Python 3.11 and dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3.11-distutils \
+    python3-pip \
+    python3.11-venv \
+    curl \
+    wget \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create python symlinks
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip setuptools wheel
+
+WORKDIR /app
+
+# Set CUDA environment variables
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+
+# Install PyTorch with CUDA 12.1 support
+RUN pip install torch==2.1.2+cu121 torchvision==0.16.2+cu121 torchaudio==2.1.2+cu121 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Copy and install requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY src_clean/ /app/src_clean/
+COPY scripts/ /app/scripts/
+COPY notebooks/ /app/notebooks/
+COPY configs/ /app/configs/
+COPY *.py /app/
+
+EXPOSE 8888 8000 5000 8501
+CMD ["bash"]
 
 # ============================================================================
 # Stage 3: Development Image (with dev tools)
@@ -69,6 +122,9 @@ RUN mkdir -p \
     outputs \
     models
 
+# Set Python path
+ENV PYTHONPATH=/app
+
 # Expose ports
 EXPOSE 8888 8000 5000 8501
 
@@ -81,11 +137,11 @@ CMD ["/bin/bash"]
 FROM base as production
 
 # Copy only necessary files from dependencies stage
-COPY --from=dependencies /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=dependencies /usr/local/bin /usr/local/bin
 
 # Copy application code
-COPY src/ /app/src/
+COPY src_clean/ /app/src_clean/
 COPY scripts/ /app/scripts/
 COPY *.py /app/
 COPY requirements.txt /app/

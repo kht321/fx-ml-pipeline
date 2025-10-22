@@ -64,6 +64,39 @@ services:
     restart: unless-stopped
 
   # ============================================================================
+  # GPU-Enabled Trainer (for Deep Learning Models)
+  # ============================================================================
+  gpu-trainer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    runtime: nvidia  # Use NVIDIA runtime
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./outputs:/app/outputs
+      - ./notebooks:/app/notebooks
+      - ./scripts:/app/scripts
+      - ./.env:/app/.env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - sp500-network
+    ports:
+      - "8888:8888"  # Jupyter Lab
+    # Change this command:
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+
+  # ============================================================================
   # Data Pipeline Runner (Bronze → Silver → Gold)
   # ============================================================================
   pipeline:
