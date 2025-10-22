@@ -62,3 +62,9 @@ airflow_logs/
 data_clean/*.zip
 *.zip
 *.db
+
+# Model checkpoints
+models/transformers/best_model_fold_*.pth
+
+# .json
+data/news/bronze/raw_articles/*.ndjson

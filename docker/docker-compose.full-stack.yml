@@ -274,6 +274,28 @@ services:
     depends_on:
       - fastapi
 
+  # ============================================================================
+  # Torch Model
+  # ============================================================================
+  torch-model:
+    image: python:3.11-slim
+    container_name: ml-torch-model
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir torch==2.2.0 torchvision==0.15.1 torchaudio==2.2.0 datasets accelerate &&
+             python model_server.py"
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./data_clean/models:/app/models
+      - ./src/model_server:/app
+    networks:
+      - ml-network
+    depends_on:
+      - mlflow
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+
 # ============================================================================
 # VOLUMES
 # ============================================================================
