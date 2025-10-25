@@ -1,0 +1,22 @@
+artifact_path: /Users/kevintaukoor/Projects/MLE Group Original/fx-ml-pipeline/news-simulator/mlruns/1/models/m-9953a5aeba504757997d5c023f67f242/artifacts
+flavors:
+  python_function:
+    data: model.xgb
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.xgboost
+    python_version: 3.11.13
+  xgboost:
+    code: null
+    data: model.xgb
+    model_class: xgboost.sklearn.XGBClassifier
+    model_format: xgb
+    xgb_version: 3.0.5
+mlflow_version: 3.5.0
+model_id: m-9953a5aeba504757997d5c023f67f242
+model_size_bytes: 915398
+model_uuid: m-9953a5aeba504757997d5c023f67f242
+prompts: null
+run_id: 38fe5227f8814a44917b8e1e1990c732
+utc_time_created: '2025-10-17 17:53:05.116234'
