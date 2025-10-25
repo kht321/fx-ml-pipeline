@@ -1,0 +1,1382 @@
+[2025-10-17T19:35:49.245+0000] {manager.py:483} INFO - Processing files using up to 2 processes at a time 
+[2025-10-17T19:35:49.245+0000] {manager.py:484} INFO - Process each file at most once every 30 seconds
+[2025-10-17T19:35:49.246+0000] {manager.py:485} INFO - Checking for new files in /opt/airflow/dags every 300 seconds
+[2025-10-17T19:35:49.246+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T19:35:49.248+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T19:35:49.380+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run      Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  ----------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py    178  0.01s             0           0                                                   0
+/opt/airflow/dags/train_deploy_pipeline.py    175  0.11s             0           0                                                   0
+/opt/airflow/dags/data_pipeline.py                                   0           0                                                   0
+/opt/airflow/dags/batch_inference.py                                 0           0                                                   0
+================================================================================
+[2025-10-17T19:36:19.841+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    195  0.01s             1           0  0.13s           2025-10-17T19:35:49                      43
+/opt/airflow/dags/docker_tasks_pipeline.py    198  0.00s             1           0  0.09s           2025-10-17T19:35:49                      43
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.08s           2025-10-17T19:35:49                      43
+/opt/airflow/dags/batch_inference.py                                 1           0  0.08s           2025-10-17T19:35:49                      43
+================================================================================
+[2025-10-17T19:36:50.303+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    215  0.01s             1           0  0.06s           2025-10-17T19:36:19                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    218  0.00s             1           0  0.05s           2025-10-17T19:36:19                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:36:19                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:36:19                      10
+================================================================================
+[2025-10-17T19:37:20.751+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    235  0.01s             1           0  0.06s           2025-10-17T19:36:50                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    238  0.00s             1           0  0.05s           2025-10-17T19:36:50                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:36:50                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:36:50                      10
+================================================================================
+[2025-10-17T19:37:51.220+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    255  0.01s             1           0  0.06s           2025-10-17T19:37:20                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    258  0.00s             1           0  0.05s           2025-10-17T19:37:20                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:37:20                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:37:20                      10
+================================================================================
+[2025-10-17T19:38:21.596+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    275  0.01s             1           0  0.05s           2025-10-17T19:37:51                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    278  0.00s             1           0  0.05s           2025-10-17T19:37:51                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:37:51                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:37:51                      10
+================================================================================
+[2025-10-17T19:38:52.021+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    295  0.01s             1           0  0.06s           2025-10-17T19:38:21                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    298  0.00s             1           0  0.05s           2025-10-17T19:38:21                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:38:21                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:38:21                      10
+================================================================================
+[2025-10-17T19:39:22.477+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    315  0.01s             1           0  0.06s           2025-10-17T19:38:52                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    318  0.00s             1           0  0.06s           2025-10-17T19:38:52                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:38:52                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:38:52                      10
+================================================================================
+[2025-10-17T19:39:52.881+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    335  0.01s             1           0  0.06s           2025-10-17T19:39:22                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    338  0.00s             1           0  0.05s           2025-10-17T19:39:22                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:39:22                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:39:22                      10
+================================================================================
+[2025-10-17T19:40:23.340+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    355  0.01s             1           0  0.06s           2025-10-17T19:39:52                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    358  0.00s             1           0  0.05s           2025-10-17T19:39:52                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:39:52                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:39:52                      10
+================================================================================
+[2025-10-17T19:40:49.693+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T19:40:49.704+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T19:40:53.753+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    381  0.00s             1           0  0.06s           2025-10-17T19:40:23                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    384  0.00s             1           0  0.05s           2025-10-17T19:40:23                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T19:40:23                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:40:23                      10
+================================================================================
+[2025-10-17T19:41:24.171+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    416  0.01s             1           0  0.04s           2025-10-17T19:40:53                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    419  0.00s             1           0  0.04s           2025-10-17T19:40:53                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:40:53                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:40:53                      10
+================================================================================
+[2025-10-17T19:41:54.625+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    451  0.01s             1           0  0.06s           2025-10-17T19:41:24                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    454  0.00s             1           0  0.05s           2025-10-17T19:41:24                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:41:24                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:41:24                      10
+================================================================================
+[2025-10-17T19:42:25.094+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    474  0.01s             1           0  0.06s           2025-10-17T19:41:54                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    477  0.00s             1           0  0.05s           2025-10-17T19:41:54                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:41:54                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:41:54                      10
+================================================================================
+[2025-10-17T19:42:55.541+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    494  0.01s             1           0  0.06s           2025-10-17T19:42:25                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    497  0.00s             1           0  0.05s           2025-10-17T19:42:25                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:42:25                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:42:25                      10
+================================================================================
+[2025-10-17T19:43:26.000+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py    517  0.00s             1           0  0.06s           2025-10-17T19:42:55                      10
+/opt/airflow/dags/train_deploy_pipeline.py    514  0.01s             1           0  0.06s           2025-10-17T19:42:55                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:42:55                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:42:55                      10
+================================================================================
+[2025-10-17T19:43:56.475+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    534  0.01s             1           0  0.06s           2025-10-17T19:43:26                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    537  0.00s             1           0  0.06s           2025-10-17T19:43:26                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:43:26                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:43:26                      10
+================================================================================
+[2025-10-17T19:44:26.935+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    554  0.01s             1           0  0.06s           2025-10-17T19:43:56                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    557  0.00s             1           0  0.05s           2025-10-17T19:43:56                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:43:56                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:43:56                      10
+================================================================================
+[2025-10-17T19:44:57.396+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    574  0.01s             1           0  0.06s           2025-10-17T19:44:26                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    577  0.00s             1           0  0.06s           2025-10-17T19:44:26                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:44:27                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:44:27                      10
+================================================================================
+[2025-10-17T19:45:27.837+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    594  0.01s             1           0  0.06s           2025-10-17T19:44:57                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    597  0.00s             1           0  0.06s           2025-10-17T19:44:57                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:44:57                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:44:57                      10
+================================================================================
+[2025-10-17T19:45:50.208+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T19:45:50.217+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T19:45:58.335+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    614  0.01s             1           0  0.05s           2025-10-17T19:45:27                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    617  0.00s             1           0  0.05s           2025-10-17T19:45:27                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:45:27                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:45:27                      10
+================================================================================
+[2025-10-17T19:46:28.806+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    634  0.01s             1           0  0.06s           2025-10-17T19:45:58                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    637  0.00s             1           0  0.05s           2025-10-17T19:45:58                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:45:58                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:45:58                      10
+================================================================================
+[2025-10-17T19:46:59.286+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    654  0.01s             1           0  0.06s           2025-10-17T19:46:28                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    657  0.00s             1           0  0.06s           2025-10-17T19:46:28                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:46:28                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:46:28                      10
+================================================================================
+[2025-10-17T19:47:29.751+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    674  0.01s             1           0  0.06s           2025-10-17T19:46:59                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    677  0.00s             1           0  0.06s           2025-10-17T19:46:59                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T19:46:59                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:46:59                      10
+================================================================================
+[2025-10-17T19:48:00.139+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    694  0.01s             1           0  0.06s           2025-10-17T19:47:29                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    697  0.00s             1           0  0.05s           2025-10-17T19:47:29                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:47:29                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:47:29                      10
+================================================================================
+[2025-10-17T19:48:30.607+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    714  0.01s             1           0  0.06s           2025-10-17T19:48:00                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    717  0.00s             1           0  0.05s           2025-10-17T19:48:00                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:48:00                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:48:00                      10
+================================================================================
+[2025-10-17T19:49:01.070+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    734  0.01s             1           0  0.06s           2025-10-17T19:48:30                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    737  0.00s             1           0  0.06s           2025-10-17T19:48:30                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:48:30                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:48:30                      10
+================================================================================
+[2025-10-17T19:49:31.497+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py    757  0.00s             1           0  0.06s           2025-10-17T19:49:01                      10
+/opt/airflow/dags/train_deploy_pipeline.py    754  0.01s             1           0  0.06s           2025-10-17T19:49:01                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:49:01                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:49:01                      10
+================================================================================
+[2025-10-17T19:50:01.968+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py    777  0.00s             1           0  0.06s           2025-10-17T19:49:31                      10
+/opt/airflow/dags/train_deploy_pipeline.py    774  0.01s             1           0  0.06s           2025-10-17T19:49:31                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:49:31                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:49:31                      10
+================================================================================
+[2025-10-17T19:50:32.455+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    794  0.01s             1           0  0.06s           2025-10-17T19:50:02                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    797  0.00s             1           0  0.05s           2025-10-17T19:50:02                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:50:02                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:50:02                      10
+================================================================================
+[2025-10-17T19:50:50.682+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T19:50:50.692+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T19:51:02.845+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    814  0.01s             1           0  0.06s           2025-10-17T19:50:32                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    817  0.00s             1           0  0.06s           2025-10-17T19:50:32                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:50:32                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:50:32                      10
+================================================================================
+[2025-10-17T19:51:33.280+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    834  0.01s             1           0  0.06s           2025-10-17T19:51:02                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    837  0.00s             1           0  0.05s           2025-10-17T19:51:02                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:51:02                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:51:02                      10
+================================================================================
+[2025-10-17T19:52:03.723+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    854  0.01s             1           0  0.06s           2025-10-17T19:51:33                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    857  0.00s             1           0  0.05s           2025-10-17T19:51:33                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:51:33                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:51:33                      10
+================================================================================
+[2025-10-17T19:52:34.149+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    874  0.01s             1           0  0.06s           2025-10-17T19:52:03                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    877  0.00s             1           0  0.05s           2025-10-17T19:52:03                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:52:03                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:52:03                      10
+================================================================================
+[2025-10-17T19:53:04.568+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py    897  0.00s             1           0  0.06s           2025-10-17T19:52:34                      10
+/opt/airflow/dags/train_deploy_pipeline.py    894  0.01s             1           0  0.06s           2025-10-17T19:52:34                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:52:34                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:52:34                      10
+================================================================================
+[2025-10-17T19:53:35.031+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    914  0.01s             1           0  0.06s           2025-10-17T19:53:04                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    917  0.00s             1           0  0.05s           2025-10-17T19:53:04                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:53:04                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:53:04                      10
+================================================================================
+[2025-10-17T19:54:05.507+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    934  0.01s             1           0  0.06s           2025-10-17T19:53:35                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    937  0.00s             1           0  0.06s           2025-10-17T19:53:35                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:53:35                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:53:35                      10
+================================================================================
+[2025-10-17T19:54:35.931+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    954  0.01s             1           0  0.06s           2025-10-17T19:54:05                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    957  0.00s             1           0  0.05s           2025-10-17T19:54:05                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:54:05                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:54:05                      10
+================================================================================
+[2025-10-17T19:55:06.407+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    974  0.01s             1           0  0.06s           2025-10-17T19:54:35                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    977  0.00s             1           0  0.05s           2025-10-17T19:54:35                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T19:54:36                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.05s           2025-10-17T19:54:36                      10
+================================================================================
+[2025-10-17T19:55:36.855+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py    994  0.01s             1           0  0.06s           2025-10-17T19:55:06                      10
+/opt/airflow/dags/docker_tasks_pipeline.py    997  0.00s             1           0  0.05s           2025-10-17T19:55:06                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:55:06                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:55:06                      10
+================================================================================
+[2025-10-17T19:55:51.067+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T19:55:51.077+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T19:56:07.275+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1014  0.01s             1           0  0.06s           2025-10-17T19:55:36                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1017  0.00s             1           0  0.05s           2025-10-17T19:55:36                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T19:55:36                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:55:36                      10
+================================================================================
+[2025-10-17T19:56:37.742+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1037  0.00s             1           0  0.06s           2025-10-17T19:56:07                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1034  0.01s             1           0  0.06s           2025-10-17T19:56:07                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:56:07                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:56:07                      10
+================================================================================
+[2025-10-17T19:57:08.168+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1054  0.01s             1           0  0.06s           2025-10-17T19:56:37                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1057  0.00s             1           0  0.05s           2025-10-17T19:56:37                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:56:37                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:56:37                      10
+================================================================================
+[2025-10-17T19:57:38.655+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1074  0.01s             1           0  0.06s           2025-10-17T19:57:08                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1077  0.00s             1           0  0.05s           2025-10-17T19:57:08                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:57:08                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:57:08                      10
+================================================================================
+[2025-10-17T19:58:09.098+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1094  0.01s             1           0  0.06s           2025-10-17T19:57:38                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1097  0.00s             1           0  0.06s           2025-10-17T19:57:38                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:57:38                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:57:38                      10
+================================================================================
+[2025-10-17T19:58:39.583+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1117  0.00s             1           0  0.06s           2025-10-17T19:58:09                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1114  0.01s             1           0  0.06s           2025-10-17T19:58:09                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:58:09                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:58:09                      10
+================================================================================
+[2025-10-17T19:59:10.026+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1134  0.01s             1           0  0.06s           2025-10-17T19:58:39                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1137  0.00s             1           0  0.06s           2025-10-17T19:58:39                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:58:39                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:58:39                      10
+================================================================================
+[2025-10-17T19:59:40.470+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1154  0.01s             1           0  0.06s           2025-10-17T19:59:10                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1157  0.00s             1           0  0.06s           2025-10-17T19:59:10                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:59:10                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T19:59:10                      10
+================================================================================
+[2025-10-17T20:00:10.941+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1174  0.01s             1           0  0.06s           2025-10-17T19:59:40                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1177  0.00s             1           0  0.06s           2025-10-17T19:59:40                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T19:59:40                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T19:59:40                      10
+================================================================================
+[2025-10-17T20:00:41.378+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1197  0.00s             1           0  0.06s           2025-10-17T20:00:10                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1194  0.01s             1           0  0.06s           2025-10-17T20:00:10                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:00:11                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:00:11                      10
+================================================================================
+[2025-10-17T20:00:51.589+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:00:51.599+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:01:11.808+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1214  0.01s             1           0  0.06s           2025-10-17T20:00:41                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1217  0.00s             1           0  0.05s           2025-10-17T20:00:41                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:00:41                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:00:41                      10
+================================================================================
+[2025-10-17T20:01:42.180+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1234  0.01s             1           0  0.06s           2025-10-17T20:01:11                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1237  0.00s             1           0  0.05s           2025-10-17T20:01:11                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:01:11                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.05s           2025-10-17T20:01:11                      10
+================================================================================
+[2025-10-17T20:02:12.628+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1254  0.01s             1           0  0.06s           2025-10-17T20:01:42                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1257  0.00s             1           0  0.06s           2025-10-17T20:01:42                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:01:42                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:01:42                      10
+================================================================================
+[2025-10-17T20:02:43.086+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1274  0.01s             1           0  0.06s           2025-10-17T20:02:12                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1277  0.00s             1           0  0.05s           2025-10-17T20:02:12                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:02:12                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:02:12                      10
+================================================================================
+[2025-10-17T20:03:13.544+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1294  0.01s             1           0  0.06s           2025-10-17T20:02:43                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1297  0.00s             1           0  0.06s           2025-10-17T20:02:43                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:02:43                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:02:43                      10
+================================================================================
+[2025-10-17T20:03:43.973+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1314  0.01s             1           0  0.06s           2025-10-17T20:03:13                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1317  0.00s             1           0  0.05s           2025-10-17T20:03:13                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:03:13                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:03:13                      10
+================================================================================
+[2025-10-17T20:04:14.419+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1334  0.01s             1           0  0.06s           2025-10-17T20:03:44                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1337  0.00s             1           0  0.06s           2025-10-17T20:03:44                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:03:44                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:03:44                      10
+================================================================================
+[2025-10-17T20:04:44.871+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1354  0.01s             1           0  0.06s           2025-10-17T20:04:14                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1357  0.00s             1           0  0.05s           2025-10-17T20:04:14                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:04:14                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:04:14                      10
+================================================================================
+[2025-10-17T20:05:15.344+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1374  0.01s             1           0  0.07s           2025-10-17T20:04:44                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1377  0.00s             1           0  0.06s           2025-10-17T20:04:44                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:04:44                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:04:45                      10
+================================================================================
+[2025-10-17T20:05:45.767+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1394  0.01s             1           0  0.06s           2025-10-17T20:05:15                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1397  0.00s             1           0  0.05s           2025-10-17T20:05:15                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:05:15                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:05:15                      10
+================================================================================
+[2025-10-17T20:05:51.929+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:05:51.937+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:06:16.239+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1414  0.01s             1           0  0.06s           2025-10-17T20:05:45                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1417  0.00s             1           0  0.05s           2025-10-17T20:05:45                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:05:45                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:05:45                      10
+================================================================================
+[2025-10-17T20:06:46.703+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1434  0.01s             1           0  0.06s           2025-10-17T20:06:16                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1437  0.00s             1           0  0.05s           2025-10-17T20:06:16                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:06:16                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:06:16                      10
+================================================================================
+[2025-10-17T20:07:17.169+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1457  0.00s             1           0  0.06s           2025-10-17T20:06:46                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1454  0.01s             1           0  0.06s           2025-10-17T20:06:46                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:06:46                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.05s           2025-10-17T20:06:46                      10
+================================================================================
+[2025-10-17T20:07:47.582+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1474  0.01s             1           0  0.06s           2025-10-17T20:07:17                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1477  0.00s             1           0  0.05s           2025-10-17T20:07:17                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:07:17                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:07:17                      10
+================================================================================
+[2025-10-17T20:08:18.014+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1494  0.01s             1           0  0.06s           2025-10-17T20:07:47                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1497  0.00s             1           0  0.05s           2025-10-17T20:07:47                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:07:47                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:07:47                      10
+================================================================================
+[2025-10-17T20:08:48.422+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1514  0.01s             1           0  0.06s           2025-10-17T20:08:18                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1517  0.00s             1           0  0.06s           2025-10-17T20:08:18                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:08:18                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:08:18                      10
+================================================================================
+[2025-10-17T20:09:18.879+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1534  0.01s             1           0  0.06s           2025-10-17T20:08:48                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1537  0.00s             1           0  0.05s           2025-10-17T20:08:48                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:08:48                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:08:48                      10
+================================================================================
+[2025-10-17T20:09:49.324+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1554  0.01s             1           0  0.07s           2025-10-17T20:09:18                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1557  0.00s             1           0  0.06s           2025-10-17T20:09:18                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:09:18                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:09:19                      10
+================================================================================
+[2025-10-17T20:10:19.765+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1574  0.01s             1           0  0.07s           2025-10-17T20:09:49                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1577  0.00s             1           0  0.06s           2025-10-17T20:09:49                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:09:49                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:09:49                      10
+================================================================================
+[2025-10-17T20:10:50.219+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1594  0.01s             1           0  0.06s           2025-10-17T20:10:19                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1597  0.00s             1           0  0.06s           2025-10-17T20:10:19                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:10:19                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:10:19                      10
+================================================================================
+[2025-10-17T20:10:52.347+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:10:52.356+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:11:20.703+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1617  0.00s             1           0  0.06s           2025-10-17T20:10:50                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1614  0.01s             1           0  0.06s           2025-10-17T20:10:50                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:10:50                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:10:50                      10
+================================================================================
+[2025-10-17T20:11:51.173+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1634  0.01s             1           0  0.06s           2025-10-17T20:11:20                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1637  0.00s             1           0  0.05s           2025-10-17T20:11:20                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:11:20                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:11:20                      10
+================================================================================
+[2025-10-17T20:12:21.639+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1654  0.01s             1           0  0.06s           2025-10-17T20:11:51                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1657  0.00s             1           0  0.06s           2025-10-17T20:11:51                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:11:51                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:11:51                      10
+================================================================================
+[2025-10-17T20:12:52.103+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1674  0.01s             1           0  0.06s           2025-10-17T20:12:21                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1677  0.00s             1           0  0.06s           2025-10-17T20:12:21                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:12:21                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:12:21                      10
+================================================================================
+[2025-10-17T20:13:22.478+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1694  0.01s             1           0  0.06s           2025-10-17T20:12:52                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1697  0.00s             1           0  0.05s           2025-10-17T20:12:52                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:12:52                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:12:52                      10
+================================================================================
+[2025-10-17T20:13:52.912+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1714  0.01s             1           0  0.06s           2025-10-17T20:13:22                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1717  0.00s             1           0  0.06s           2025-10-17T20:13:22                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:13:22                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:13:22                      10
+================================================================================
+[2025-10-17T20:14:23.433+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1737  0.00s             1           0  0.06s           2025-10-17T20:13:52                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1734  0.01s             1           0  0.06s           2025-10-17T20:13:52                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:13:53                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:13:53                      10
+================================================================================
+[2025-10-17T20:14:53.899+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1754  0.01s             1           0  0.06s           2025-10-17T20:14:23                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1757  0.00s             1           0  0.05s           2025-10-17T20:14:23                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:14:23                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:14:23                      10
+================================================================================
+[2025-10-17T20:15:24.379+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1777  0.00s             1           0  0.06s           2025-10-17T20:14:53                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1774  0.00s             1           0  0.06s           2025-10-17T20:14:53                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:14:53                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:14:54                      10
+================================================================================
+[2025-10-17T20:15:52.799+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:15:52.808+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:15:54.853+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1794  0.01s             1           0  0.06s           2025-10-17T20:15:24                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1797  0.00s             1           0  0.05s           2025-10-17T20:15:24                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:15:24                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:15:24                      10
+================================================================================
+[2025-10-17T20:16:25.282+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1814  0.01s             1           0  0.06s           2025-10-17T20:15:54                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1817  0.00s             1           0  0.06s           2025-10-17T20:15:54                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:15:54                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:15:54                      10
+================================================================================
+[2025-10-17T20:16:55.751+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1834  0.01s             1           0  0.06s           2025-10-17T20:16:25                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1837  0.00s             1           0  0.06s           2025-10-17T20:16:25                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:16:25                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:16:25                      10
+================================================================================
+[2025-10-17T20:17:26.217+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1854  0.01s             1           0  0.06s           2025-10-17T20:16:55                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1857  0.00s             1           0  0.05s           2025-10-17T20:16:55                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:16:55                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:16:55                      10
+================================================================================
+[2025-10-17T20:17:56.650+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1874  0.01s             1           0  0.06s           2025-10-17T20:17:26                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1877  0.00s             1           0  0.05s           2025-10-17T20:17:26                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:17:26                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:17:26                      10
+================================================================================
+[2025-10-17T20:18:27.122+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1897  0.00s             1           0  0.06s           2025-10-17T20:17:56                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1894  0.00s             1           0  0.06s           2025-10-17T20:17:56                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:17:56                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:17:56                      10
+================================================================================
+[2025-10-17T20:18:57.550+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1914  0.01s             1           0  0.05s           2025-10-17T20:18:27                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1917  0.00s             1           0  0.05s           2025-10-17T20:18:27                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:18:27                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:18:27                      10
+================================================================================
+[2025-10-17T20:19:27.995+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1934  0.01s             1           0  0.06s           2025-10-17T20:18:57                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1937  0.00s             1           0  0.05s           2025-10-17T20:18:57                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:18:57                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:18:57                      10
+================================================================================
+[2025-10-17T20:19:58.486+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1954  0.01s             1           0  0.07s           2025-10-17T20:19:28                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1957  0.00s             1           0  0.06s           2025-10-17T20:19:28                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:19:28                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:19:28                      10
+================================================================================
+[2025-10-17T20:20:28.864+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   1974  0.01s             1           0  0.06s           2025-10-17T20:19:58                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   1977  0.00s             1           0  0.06s           2025-10-17T20:19:58                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:19:58                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:19:58                      10
+================================================================================
+[2025-10-17T20:20:53.257+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:20:53.269+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:20:59.374+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   1997  0.00s             1           0  0.06s           2025-10-17T20:20:28                      10
+/opt/airflow/dags/train_deploy_pipeline.py   1994  0.01s             1           0  0.06s           2025-10-17T20:20:28                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:20:28                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:20:28                      10
+================================================================================
+[2025-10-17T20:21:29.843+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2014  0.01s             1           0  0.07s           2025-10-17T20:20:59                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2017  0.00s             1           0  0.05s           2025-10-17T20:20:59                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:20:59                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:20:59                      10
+================================================================================
+[2025-10-17T20:22:00.333+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2034  0.01s             1           0  0.06s           2025-10-17T20:21:29                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2037  0.00s             1           0  0.05s           2025-10-17T20:21:29                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:21:29                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:21:29                      10
+================================================================================
+[2025-10-17T20:22:30.779+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2054  0.01s             1           0  0.06s           2025-10-17T20:22:00                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2057  0.00s             1           0  0.06s           2025-10-17T20:22:00                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.05s           2025-10-17T20:22:00                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:22:00                      10
+================================================================================
+[2025-10-17T20:23:01.250+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2074  0.01s             1           0  0.06s           2025-10-17T20:22:30                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2077  0.00s             1           0  0.05s           2025-10-17T20:22:30                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:22:30                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:22:30                      10
+================================================================================
+[2025-10-17T20:23:31.729+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2094  0.01s             1           0  0.06s           2025-10-17T20:23:01                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2097  0.00s             1           0  0.05s           2025-10-17T20:23:01                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:23:01                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:23:01                      10
+================================================================================
+[2025-10-17T20:24:02.209+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2114  0.01s             1           0  0.06s           2025-10-17T20:23:31                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2117  0.00s             1           0  0.05s           2025-10-17T20:23:31                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:23:31                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:23:31                      10
+================================================================================
+[2025-10-17T20:24:32.664+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2134  0.01s             1           0  0.06s           2025-10-17T20:24:02                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2137  0.00s             1           0  0.06s           2025-10-17T20:24:02                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:24:02                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:24:02                      10
+================================================================================
+[2025-10-17T20:25:03.100+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2154  0.01s             1           0  0.06s           2025-10-17T20:24:32                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2157  0.00s             1           0  0.05s           2025-10-17T20:24:32                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:24:32                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:24:32                      10
+================================================================================
+[2025-10-17T20:25:33.556+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2174  0.01s             1           0  0.06s           2025-10-17T20:25:03                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2177  0.00s             1           0  0.05s           2025-10-17T20:25:03                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:25:03                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:25:03                      10
+================================================================================
+[2025-10-17T20:25:53.893+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:25:53.900+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:26:04.040+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2194  0.01s             1           0  0.06s           2025-10-17T20:25:33                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2197  0.00s             1           0  0.06s           2025-10-17T20:25:33                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:25:33                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:25:33                      10
+================================================================================
+[2025-10-17T20:26:34.505+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2214  0.01s             1           0  0.06s           2025-10-17T20:26:04                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2217  0.00s             1           0  0.05s           2025-10-17T20:26:04                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:26:04                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:26:04                      10
+================================================================================
+[2025-10-17T20:27:04.948+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2234  0.01s             1           0  0.06s           2025-10-17T20:26:34                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2237  0.00s             1           0  0.05s           2025-10-17T20:26:34                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:26:34                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:26:34                      10
+================================================================================
+[2025-10-17T20:27:35.403+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2254  0.01s             1           0  0.06s           2025-10-17T20:27:04                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2257  0.00s             1           0  0.05s           2025-10-17T20:27:04                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:27:05                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:27:05                      10
+================================================================================
+[2025-10-17T20:28:05.860+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2274  0.01s             1           0  0.06s           2025-10-17T20:27:35                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2277  0.00s             1           0  0.05s           2025-10-17T20:27:35                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:27:35                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:27:35                      10
+================================================================================
+[2025-10-17T20:28:36.338+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2294  0.01s             1           0  0.06s           2025-10-17T20:28:05                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2297  0.00s             1           0  0.05s           2025-10-17T20:28:05                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:28:05                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:28:05                      10
+================================================================================
+[2025-10-17T20:29:06.758+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2314  0.01s             1           0  0.06s           2025-10-17T20:28:36                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2317  0.00s             1           0  0.05s           2025-10-17T20:28:36                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:28:36                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:28:36                      10
+================================================================================
+[2025-10-17T20:29:37.187+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2334  0.01s             1           0  0.06s           2025-10-17T20:29:06                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2337  0.00s             1           0  0.06s           2025-10-17T20:29:06                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:29:06                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:29:06                      10
+================================================================================
+[2025-10-17T20:30:07.623+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2354  0.01s             1           0  0.06s           2025-10-17T20:29:37                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2357  0.00s             1           0  0.06s           2025-10-17T20:29:37                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:29:37                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:29:37                      10
+================================================================================
+[2025-10-17T20:30:38.155+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   2377  0.00s             1           0  0.13s           2025-10-17T20:30:07                      10
+/opt/airflow/dags/train_deploy_pipeline.py   2374  0.01s             1           0  0.13s           2025-10-17T20:30:07                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:30:07                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:30:07                      10
+================================================================================
+[2025-10-17T20:30:54.433+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:30:54.443+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:31:08.632+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2394  0.01s             1           0  0.06s           2025-10-17T20:30:38                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2397  0.00s             1           0  0.06s           2025-10-17T20:30:38                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:30:38                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:30:38                      10
+================================================================================
+[2025-10-17T20:31:38.998+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2414  0.01s             1           0  0.06s           2025-10-17T20:31:08                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2417  0.00s             1           0  0.05s           2025-10-17T20:31:08                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.05s           2025-10-17T20:31:08                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:31:08                      10
+================================================================================
+[2025-10-17T20:32:09.512+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2434  0.01s             1           0  0.12s           2025-10-17T20:31:39                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2437  0.00s             1           0  0.12s           2025-10-17T20:31:39                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.11s           2025-10-17T20:31:39                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.11s           2025-10-17T20:31:39                      10
+================================================================================
+[2025-10-17T20:32:39.976+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2454  0.01s             1           0  0.06s           2025-10-17T20:32:09                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2457  0.00s             1           0  0.06s           2025-10-17T20:32:09                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:32:09                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:32:09                      10
+================================================================================
+[2025-10-17T20:33:10.451+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2474  0.01s             1           0  0.06s           2025-10-17T20:32:40                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2477  0.00s             1           0  0.05s           2025-10-17T20:32:40                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:32:40                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:32:40                      10
+================================================================================
+[2025-10-17T20:33:40.992+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/docker_tasks_pipeline.py   2497  0.00s             1           0  0.13s           2025-10-17T20:33:10                      10
+/opt/airflow/dags/train_deploy_pipeline.py   2494  0.01s             1           0  0.12s           2025-10-17T20:33:10                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.09s           2025-10-17T20:33:10                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.09s           2025-10-17T20:33:10                      10
+================================================================================
+[2025-10-17T20:34:11.465+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2514  0.01s             1           0  0.06s           2025-10-17T20:33:41                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2517  0.00s             1           0  0.05s           2025-10-17T20:33:41                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:33:41                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:33:41                      10
+================================================================================
+[2025-10-17T20:34:41.924+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2534  0.01s             1           0  0.06s           2025-10-17T20:34:11                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2537  0.00s             1           0  0.06s           2025-10-17T20:34:11                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:34:11                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:34:11                      10
+================================================================================
+[2025-10-17T20:35:12.415+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2554  0.01s             1           0  0.13s           2025-10-17T20:34:42                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2557  0.00s             1           0  0.12s           2025-10-17T20:34:42                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.10s           2025-10-17T20:34:42                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.10s           2025-10-17T20:34:42                      10
+================================================================================
+[2025-10-17T20:35:43.037+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2574  0.01s             1           0  0.12s           2025-10-17T20:35:12                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2577  0.00s             1           0  0.12s           2025-10-17T20:35:12                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.09s           2025-10-17T20:35:12                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.09s           2025-10-17T20:35:12                      10
+================================================================================
+[2025-10-17T20:35:55.275+0000] {manager.py:821} INFO - Searching for files in /opt/airflow/dags
+[2025-10-17T20:35:55.285+0000] {manager.py:824} INFO - There are 4 files in /opt/airflow/dags
+[2025-10-17T20:36:13.514+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2594  0.01s             1           0  0.06s           2025-10-17T20:35:43                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2597  0.00s             1           0  0.06s           2025-10-17T20:35:43                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:35:43                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:35:43                      10
+================================================================================
+[2025-10-17T20:36:44.002+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2614  0.01s             1           0  0.06s           2025-10-17T20:36:13                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2617  0.00s             1           0  0.05s           2025-10-17T20:36:13                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:36:13                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:36:13                      10
+================================================================================
+[2025-10-17T20:37:14.476+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2634  0.01s             1           0  0.06s           2025-10-17T20:36:44                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2637  0.00s             1           0  0.06s           2025-10-17T20:36:44                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.04s           2025-10-17T20:36:44                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:36:44                      10
+================================================================================
+[2025-10-17T20:37:44.921+0000] {manager.py:997} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                     PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run               Last # of DB Queries
+------------------------------------------  -----  ---------  --------  ----------  --------------  -------------------  ----------------------
+/opt/airflow/dags/train_deploy_pipeline.py   2654  0.01s             1           0  0.06s           2025-10-17T20:37:14                      10
+/opt/airflow/dags/docker_tasks_pipeline.py   2657  0.00s             1           0  0.05s           2025-10-17T20:37:14                      10
+/opt/airflow/dags/data_pipeline.py                                   1           0  0.04s           2025-10-17T20:37:14                      10
+/opt/airflow/dags/batch_inference.py                                 1           0  0.03s           2025-10-17T20:37:14                      10
+================================================================================
