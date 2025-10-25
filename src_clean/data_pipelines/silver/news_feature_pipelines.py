@@ -28,12 +28,13 @@ import argparse
 import json
 import logging
 import os
-import textwrap
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from dotenv import load_dotenv
+from datetime import datetime, timezone
 
 import pandas as pd
 from pydantic import BaseModel, Field, ValidationError
@@ -41,6 +42,13 @@ from pydantic import BaseModel, Field, ValidationError
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+load_dotenv()
+google_api_key = os.getenv("GOOGLE_API_KEY")
+if not google_api_key:
+    raise EnvironmentError("GOOGLE_API_KEY not found in environment or .env")
+
+# Optionally set explicitly (not usually necessary once the env var is loaded)
+os.environ["GOOGLE_API_KEY"] = google_api_key
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -150,7 +158,7 @@ class NewsFeatureSchema(BaseModel):
     time_horizon_numeric: float = Field(..., ge=0.0, le=1.0)
 
     # Summary & Context
-    context_history_summary: Optional[str]
+    context_history_summary: str
     short_summary: str
     key_new_information: List[str]
     overall_market_sentiment: Optional[str]
@@ -400,7 +408,7 @@ class NewsLLMFeaturePipeline:
             "- time_horizon: Qualitative window (short, medium, long).\n"
             "- time_horizon_numeric (0-1): Quantitative encoding (short to long).\n\n"
             "SUMMARY & CONTEXT\n"
-            "- context_history_summary: Update prior context with this article.\n"
+            "- context_history_summary: Update prior context history with new relevant information from this article that summarizes the market sentiment, expectations, and information related to S&P 500 for future price forecasting.\n"
             "- short_summary: 1-2 sentence article summary.\n"
             "- key_new_information: 1-5 new facts or developments.\n"
             "- overall_market_sentiment: Bullish / Neutral / Bearish.\n"
@@ -469,28 +477,6 @@ class NewsLLMFeaturePipeline:
             return 0.0
         return float(f"{value:.{sig}g}")
     
-    def _approx_token_count(self, text: str) -> int:
-        """Rough token estimate using character length heuristic."""
-        if not text:
-            return 0
-        return max(1, len(text) // 4)
-
-    def _format_quant_features(
-        self,
-        features: Dict[str, Any],
-        limit: Optional[int] = None,
-    ) -> str:
-        """Format quantitative features with optional truncation."""
-        items = sorted(features.items())
-        truncated = False
-        if limit is not None and len(items) > limit:
-            items = items[:limit]
-            truncated = True
-        block = json.dumps(dict(items), indent=2, sort_keys=True)
-        if truncated:
-            block += f"\n(Note: truncated to first {limit} features due to prompt length limits.)"
-        return block
-
     def _combine_article_text(self, article: Dict[str, Any]) -> str:
         """Create a rich text block that mixes headline, summary, and body."""
         headline = article.get("headline") or ""
@@ -505,91 +491,152 @@ class NewsLLMFeaturePipeline:
         return "\n\n".join(part for part in parts if part)
 
     def run(self) -> Path:
-        """Generate LLM features, persisting incremental updates to the gold parquet table."""
-        manifest_df = self._load_manifest()
-        if manifest_df.empty:
-            logger.warning("Manifest contained no rows. Nothing to process.")
+        """Generate LLM features in batches and persist to the gold parquet table."""
+        # create prompt directory
+        prompts_dir = self.output_path.parent / "prompts"
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        job_snapshot = datetime.now(timezone.utc) 
+
+        manifest_df = self._load_manifest().sort_values("published_at")
+        total_rows = len(manifest_df)
+        print(f"[run] Loaded manifest with {total_rows} rows")
+        if total_rows == 0:
+            print("[run] Manifest is empty; nothing to process.")
             return self.output_path
 
-        manifest_df = manifest_df.sort_values("published_at")
-
+        # Load existing gold table if present
         if self.output_path.exists():
             try:
-                existing_df = pd.read_parquet(self.output_path)
+                combined_df = pd.read_parquet(self.output_path)
             except Exception as exc:
-                logger.warning(
-                    "Failed to read existing output parquet %s: %s", self.output_path, exc
-                )
-                existing_df = pd.DataFrame()
+                print(f"[run] Failed to read existing parquet {self.output_path}: {exc}")
+                combined_df = pd.DataFrame()
         else:
-            existing_df = pd.DataFrame()
+            combined_df = pd.DataFrame()
 
-        if not existing_df.empty and "article_id" in existing_df.columns:
-            processed_ids: Set[str] = set(
-                existing_df["article_id"].dropna().astype(str).tolist()
-            )
-        else:
-            processed_ids = set()
+        processed_ids: Set[str] = (
+            set(combined_df["article_id"].dropna().astype(str))
+            if not combined_df.empty 
+            and "article_id" in combined_df.columns
+            else set()
+        )
+        print(f"[run] Existing processed rows: {len(processed_ids)}")
 
+        # Seed context from the last processed article
         current_context = self.context_history
         if (
-            not existing_df.empty
-            and "context_history_summary" in existing_df.columns
-            and isinstance(existing_df.iloc[-1].get("context_history_summary"), str)
-            and existing_df.iloc[-1]["context_history_summary"].strip()
+            not combined_df.empty
+            and "context_history_summary" in combined_df.columns
+            and isinstance(combined_df.iloc[-1].get("context_history_summary"), str)
+            and combined_df.iloc[-1]["context_history_summary"].strip()
         ):
-            current_context = existing_df.iloc[-1]["context_history_summary"]
+            current_context = combined_df.iloc[-1]["context_history_summary"]
 
-        new_rows: List[Dict[str, Any]] = []
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        batch_size = 5
+        batch_rows: List[Dict[str, Any]] = []
+        articles_processed = 0
+        start_time = time.perf_counter()
 
         for _, row in manifest_df.iterrows():
             article_id = row.get("article_id")
+            published_at = row.get("published_at")
+
             if article_id is None:
-                logger.warning("Skipping manifest row with missing article_id.")
+                print(f"[run] Skipping row {_}: missing article_id")
                 continue
             if str(article_id) in processed_ids:
-                continue
+                prior = combined_df.loc[combined_df["article_id"].astype(str) == str(article_id),"context_history_summary"]
+                first_ctx = prior.iloc[0] if not prior.empty else None
+                if isinstance(first_ctx, str) and first_ctx.strip():
+                    current_context = first_ctx
+                    print(f'Skipping {article_id}. Published at {published_at}')
+                    continue
 
+            article_start = time.perf_counter()
             self.context_history = current_context
-            feature_row, article = self._analyze_article(row)
 
+            feature_row, article, prompt = self._analyze_article(row)
             feature_row.update(
                 {
                     "article_id": row.get("article_id") or article.get("article_id"),
-                    "published_at": row.get("published_at") or article.get("published_at"),
+                    "published_at": published_at or article.get("published_at"),
                     "source": row.get("source") or article.get("source"),
                     "headline": row.get("headline") or article.get("headline"),
                     "url": row.get("url") or article.get("url"),
+                    "run_snapshot_time": job_snapshot.isoformat(),
+                    "LLMmodel": self.model,
                 }
             )
-            new_rows.append(feature_row)
+
+            batch_rows.append(feature_row)
             processed_ids.add(str(article_id))
+            articles_processed += 1
+
+            elapsed_article = time.perf_counter() - article_start
+            total_elapsed = time.perf_counter() - start_time
+            print(
+                f"[run] Article {articles_processed}/{total_rows} | "
+                f"article_id={article_id} | published_at={published_at} | "
+                f"article_time={elapsed_article:.2f}s | total_time={total_elapsed:.2f}s"
+            )
 
             updated_context = feature_row.get("context_history_summary")
             if isinstance(updated_context, str) and updated_context.strip():
                 current_context = updated_context
 
+            # save prompts for validation and record keeping
+            prompt_payload = {
+                "article_id": article_id,
+                "run_snapshot_time": job_snapshot.isoformat(),
+                "prompt": prompt,
+                "metadata": {
+                    "headline": row.get("headline"),
+                    "published_at": row.get("published_at").isoformat(),
+                },
+            }
+            prompt_path = prompts_dir / f"{article_id}_{job_snapshot.isoformat().replace(':', '-')}.json"
+            with prompt_path.open("w", encoding="utf-8") as fh:
+                json.dump(prompt_payload, fh, ensure_ascii=False, indent=2)
+
+            if len(batch_rows) >= batch_size:
+                print(f"[run] Committing batch of {len(batch_rows)} rows to {self.output_path}")
+                batch_df = pd.DataFrame(batch_rows)
+                if combined_df.empty:
+                    combined_df = batch_df
+                else:
+                    combined_df = pd.concat([combined_df, batch_df], ignore_index=True)
+                    if "article_id" in combined_df.columns:
+                        combined_df = combined_df.sort_values("published_at", kind="mergesort")
+                        combined_df = combined_df.drop_duplicates(
+                            subset="article_id", keep="last"
+                        )
+                combined_df.to_parquet(self.output_path, index=False)
+                batch_rows.clear()
+
+        # Flush any remaining rows
+        if batch_rows:
+            print(f"[run] Committing final batch of {len(batch_rows)} rows to {self.output_path}")
+            batch_df = pd.DataFrame(batch_rows)
+            if combined_df.empty:
+                combined_df = batch_df
+            else:
+                combined_df = pd.concat([combined_df, batch_df], ignore_index=True)
+                if "article_id" in combined_df.columns:
+                    combined_df = combined_df.sort_values("published_at", kind="mergesort")
+                    combined_df = combined_df.drop_duplicates(subset="article_id", keep="last")
+            combined_df.to_parquet(self.output_path, index=False)
+
         self.context_history = current_context
-
-        if not new_rows:
-            logger.info("No new articles required processing; parquet unchanged (%s).", self.output_path)
-            return self.output_path
-
-        new_df = pd.DataFrame(new_rows)
-
-        if not existing_df.empty:
-            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
-            if "article_id" in combined_df.columns:
-                combined_df = combined_df.sort_values("published_at", kind="mergesort")
-                combined_df = combined_df.drop_duplicates(subset="article_id", keep="last")
-        else:
-            combined_df = new_df
-
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        combined_df.to_parquet(self.output_path, index=False)
-
-        logger.info("Saved %d new LLM feature rows to %s", len(new_rows), self.output_path)
+        print(
+            f"[run] Completed processing ({articles_processed} new articles). "
+            f"Final row count: {len(combined_df)}"
+        )
         return self.output_path
+
+
+
 
     def _analyze_article(self, row: pd.Series) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Call the LLM and validate the structured output with retry feedback."""
@@ -609,7 +656,7 @@ class NewsLLMFeaturePipeline:
                 parsed = NewsFeatureSchema.model_validate_json(content)
                 result = parsed.model_dump()
                 last_parsed = result
-                return result, article
+                return result, article, prompt
             except ValidationError as exc:
                 message = (
                     f"Pydantic validation failed on attempt {attempt + 1}/{self.max_retries}: {exc}"
@@ -656,7 +703,7 @@ class NewsLLMFeaturePipeline:
             except Exception:
                 fallback = {}
 
-        return fallback, last_article or {}
+        return fallback, last_article or {}, prompt
 
     def _build_prompt(
         self,
@@ -667,12 +714,14 @@ class NewsLLMFeaturePipeline:
         article = self._load_article_from_row(row)
         article_text = self._combine_article_text(article)
         quantitative_features = self._extract_quant_features(row)
-        language = article.get("language") or row.get("language") or "unknown"
+        language = article.get('language') or row.get('language') or 'unknown'
 
         rounded_features: Dict[str, Any] = {}
         for key in sorted(quantitative_features.keys()):
             value = quantitative_features[key]
-            if isinstance(value, bool) or isinstance(value, int):
+            if isinstance(value, bool):
+                rounded = value
+            elif isinstance(value, (int,)):
                 rounded = value
             elif isinstance(value, float):
                 rounded = self._round_sigfigs(value, sig=4)
@@ -680,7 +729,11 @@ class NewsLLMFeaturePipeline:
                 rounded = value
             rounded_features[key] = rounded
 
-        features_block = self._format_quant_features(rounded_features)
+        features_block = (
+            json.dumps(rounded_features, indent=2, sort_keys=True)
+            if rounded_features
+            else 'No quantitative features available.'
+        )
 
         quant_hint_lines: List[str] = []
         for key in sorted(rounded_features.keys()):
@@ -691,143 +744,42 @@ class NewsLLMFeaturePipeline:
             quant_hint_lines.append(f"- {key}: {hint}")
         if not quant_hint_lines:
             quant_hint_lines.append("- (no quantitative features provided)")
-        quant_hints_text = "
-".join(quant_hint_lines)
+        quant_hints_text = "\n".join(quant_hint_lines)
 
-        retry_section = ""
+        retry_section = ''
         if error_messages:
-            latest_errors = "
-".join(f"- {msg}" for msg in error_messages[-3:])
-            retry_section = textwrap.dedent(
-                f"""Previous attempt issues (fix all of these exactly before responding):
-{latest_errors}
-
-"""
+            latest_errors = '\n'.join(f'- {msg}' for msg in error_messages[-3:])
+            retry_section = (
+                'Previous attempt issues (fix all of these exactly before responding):\n'
+                f"{latest_errors}\n\n"
             )
 
-        sections = {
-            "header": (
-                "You are an AI model that analyzes financial news articles to extract structured, "
-                "quantitative, and predictive market features for S&P500 index price forecasting.
-
-"
-                "Return a single valid JSON object matching the NewsFeatureSchema fields below.
-
-"
-                "General rules:
-"
-                "- Output only one JSON object (no prose).
-"
-                "- Follow schema field names exactly.
-"
-                "- Use null for missing strings, 0.0 for floats, false for booleans, [] for lists.
-"
-                "- Keep numeric values within their valid ranges.
-
-"
-                f"Detected language: {language}
-
-"
-                f"{retry_section}"
-            ),
-            "quant_features": (
-                "Quantitative features aligned to this timestamp (rounded to 4 significant figures):
-"
-                f"{features_block}
-
-"
-            ),
-            "quant_hints": (
-                "Quantitative feature hints:
-"
-                f"{quant_hints_text}
-
-"
-            ),
-            "field_guide": (
-                "Field guide (key expectations for each field):
-"
-                f"{self.field_guide_text}
-
-"
-            ),
-            "article": (
-                "Current news article:
-<<<ARTICLE>>>
-"
-                f"{article_text}
-<<<END ARTICLE>>>
-
-"
-            ),
-            "context": (
-                "Previous context history summary:
-<<<CONTEXT_HISTORY>>>
-"
-                f"{self.context_history}
-<<<END CONTEXT_HISTORY>>>
-"
-            ),
-        }
-
-        def assemble() -> str:
-            return "".join(sections.values())
-
-        prompt = assemble()
-        feature_limits = [None, 60, 40, 20, 10]
-        feature_idx = 0
-
-        while self._approx_token_count(prompt) > self.max_prompt_tokens:
-            adjusted = False
-
-            if sections["field_guide"]:
-                sections["field_guide"] = ""
-                adjusted = True
-            elif sections["quant_hints"]:
-                sections["quant_hints"] = ""
-                adjusted = True
-            elif sections["quant_features"]:
-                if feature_idx < len(feature_limits) - 1:
-                    feature_idx += 1
-                    limit = feature_limits[feature_idx]
-                    if limit is not None:
-                        sections["quant_features"] = (
-                            "Quantitative features aligned to this timestamp (rounded to 4 significant figures):
-"
-                            f"{self._format_quant_features(rounded_features, limit)}
-
-"
-                        )
-                        adjusted = True
-                    else:
-                        continue
-                else:
-                    sections["quant_features"] = ""
-                    adjusted = True
-            elif len(article_text) > 2000:
-                new_len = max(2000, int(len(article_text) * 0.75))
-                article_text = article_text[:new_len].rstrip()
-                sections["article"] = (
-                    "Current news article (truncated):
-<<<ARTICLE>>>
-"
-                    f"{article_text}
-... (truncated for token limit)
-<<<END ARTICLE>>>
-
-"
-                )
-                adjusted = True
-            else:
-                logger.warning(
-                    "Prompt still exceeds token limit (%s tokens) after reductions.",
-                    self.max_prompt_tokens,
-                )
-                break
-
-            prompt = assemble()
+        prompt = (
+            'You are an AI model that analyzes financial news articles to extract structured, '
+            'quantitative, and predictive market features for S&P500 index price forecasting.\n\n'
+            'You must output a **single valid JSON object** following the exact schema below: \n'
+            f"{self.schema_text}\n\n"
+            f"Detected language: {language}\n\n"
+            'General rules:\n'
+            '- Output only one JSON object (no prose).\n'
+            '- Follow schema field names exactly.\n'
+            '- Use null for missing strings, 0.0 for floats, false for booleans, [] for lists.\n'
+            '- Keep numeric values within their valid ranges.\n\n'
+            f"{retry_section}"
+            'Quantitative features aligned to this timestamp:\n'
+            f"{features_block}\n\n"
+            'Quantitative feature hints:\n'
+            f"{quant_hints_text}\n\n"
+            'Field guide (key expectations for each field):\n'
+            f"{self.field_guide_text}\n\n"
+            'Current news article:\n<<<ARTICLE>>>\n'
+            f"{article_text}\n<<<END ARTICLE>>>\n\n"
+            'Previous context history summary:\n<<<CONTEXT_HISTORY>>>\n'
+            f"{self.context_history}\n<<<END CONTEXT_HISTORY>>>\n"
+        )
 
         return prompt, article
+
 
 # --------------------------------------------------------------------------- #
 # CLI Entrypoint
@@ -836,10 +788,9 @@ class NewsLLMFeaturePipeline:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="News feature pipelines.")
-    parser.add_argument("--mode", choices=["embeddings", "llm_features"], required=True)
     parser.add_argument("--input-dir", type=Path, required=True)
-    parser.add_argument("--output-path", type=Path, required=True)
-    parser.add_argument("--model", type=str, default=None, help="Override model name.")
+    parser.add_argument("--output-path", type=Path, default='', required=True)
+    parser.add_argument("--model", type=str, default="gemini-2.5-flash-lite", help="Override model name.")
     parser.add_argument(
         "--provider",
         type=str,
@@ -858,25 +809,26 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if args.mode == "embeddings":
-        pipeline = NewsEmbeddingPipeline(
-            input_dir=args.input_dir,
-            output_path=args.output_path,
-            model=args.model or "text-embedding-3-small",
-        )
-    else:
-        provider = args.provider.lower()
-        if provider != "gemini":
-            raise ValueError("Only provider='gemini' is supported.")
-        model_name = args.model or "gemini-2.5-flash"
-        pipeline = NewsLLMFeaturePipeline(
-            manifest_path=args.input_dir,
-            output_path=args.output_path,
-            model=model_name,
-            context_history=args.context_history,
-        )
+    provider = args.provider.lower()
+    if provider != "gemini":
+        raise ValueError("Only provider='gemini' is supported.")
+    model_name = args.model or "gemini-2.5-flash-lite"
+    pipeline = NewsLLMFeaturePipeline(
+        manifest_path=args.input_dir,
+        output_path=args.output_path,
+        model=model_name,
+        context_history=args.context_history,
+    )
     pipeline.run()
 
 
 if __name__ == "__main__":
     main()
+
+"""
+ python -m src_clean.data_pipelines.silver.news_feature_pipelines `
+    --input-dir data_clean/silver/news/news_manifest_cleaned_20251022_122221.parquet `
+    --output-path data_clean/gold/news/LLM_news.parquet `
+    --model gemini-2.0-flash-lite
+
+"""
