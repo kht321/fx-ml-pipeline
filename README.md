@@ -755,10 +755,6 @@ fx-ml-pipeline/
 │   └── news_signals.py
 │
 ├── docs/                        # Documentation
-│   ├── COMPLETE_ARCHITECTURE_DOCUMENTATION.md
-│   ├── QUICK_REFERENCE.md
-│   ├── EXPLORATION_SUMMARY.txt
-│   └── [40+ other docs]
 │
 ├── tests/                       # Unit & integration tests
 ├── mlruns/                      # MLflow experiment store
