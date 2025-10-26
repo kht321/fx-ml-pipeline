@@ -57,74 +57,44 @@ OANDA_ENV=practice
 EOF
 ```
 
-### Run the Demo
+### Run the Pipeline
 ```bash
-# Terminal 1: Start News Simulator (port 5001)
-cd news-simulator
-python app.py
-# Keep running - generates test news articles
-
-# Terminal 2: Start MLflow Tracking (port 5002, avoids macOS AirPlay conflict)
-cd ..
+# (Optional) Terminal 1: Launch MLflow tracking UI on port 5002
 source .venv/bin/activate
 mlflow ui --backend-store-uri file:./mlruns --port 5002 --host 0.0.0.0
 # Access: http://localhost:5002
 
-# Terminal 3: Train Model (one-time setup)
+# Terminal 2: Execute full medallion pipeline + model training
 source .venv/bin/activate
-python src_clean/training/xgboost_training_pipeline_mlflow.py \
-  --market-features data_clean/gold/market/features/spx500_features.csv \
-  --news-signals data_clean/gold/news/signals/sp500_trading_signals.csv \
-  --prediction-horizon 30 \
-  --mlflow-uri http://localhost:5002
-# Wait for training to complete (~2-3 minutes)
+python src_clean/run_full_pipeline.py \
+  --bronze-market data_clean/bronze/market/spx500_usd_m1_5years.ndjson \
+  --bronze-news data_clean/bronze/news \
+  --output-dir data_clean \
+  --prediction-horizon 30
 
-# Terminal 4: Start Event-Driven Predictor
-source .venv/bin/activate
-python src_clean/ui/realtime_predictor.py
-# Keep running - auto-generates predictions when news arrives
-# Uses OANDA API for real-time S&P 500 futures data (24/5 trading)
+# Need features only? Skip news processing or training with flags:
+# python src_clean/run_full_pipeline.py \
+#   --bronze-market data_clean/bronze/market/spx500_usd_m1_5years.ndjson \
+#   --skip-news \
+#   --skip-training
 
-# Terminal 5: Launch Streamlit Dashboard (port 8501)
-source .venv/bin/activate
-streamlit run src_clean/ui/streamlit_dashboard.py
-# Access: http://localhost:8501
-
-# Terminal 6: Trigger Predictions
-# Simulate positive news
-curl -X POST http://localhost:5001/api/stream/positive
-
-# Simulate negative news
-curl -X POST http://localhost:5001/api/stream/negative
-
-# Watch Terminal 4 - you'll see:
-# "INFO - Fetched 200 candles from OANDA for SPX500_USD"
-# "INFO - Prediction: UP/DOWN (confidence: XX.XX%)"
-
-# Refresh Streamlit dashboard (Tab 2) to see:
-# - Latest prediction with confidence
-# - News headline that triggered it
-# - All 70 features calculated from real OANDA data
-# - Sentiment analysis of the news
+# Optional (after pipeline completes): Launch Streamlit dashboard
+streamlit run src_clean/ui/streamlit_dashboard.py --server.headless true
 ```
 
 ### What You'll See
-1. **MLflow UI** (http://localhost:5002): Track experiments, view metrics, compare models
-2. **Streamlit Dashboard** (http://localhost:8501):
-   - **Tab 1**: Live S&P 500 price charts with candlesticks
-   - **Tab 2**: Event-driven predictions with news headlines
-   - **Tab 3**: Model performance metrics (AUC, accuracy, confusion matrix)
-   - **Tab 4**: Feature importance analysis (top 20 features)
-3. **Real-time Predictions**: Automatically triggered when news arrives, using:
-   - ✅ Live OANDA S&P 500 futures data (SPX500_USD)
-   - ✅ 70 calculated features (64 market + 6 news)
-   - ✅ News sentiment analysis
-   - ✅ XGBoost model inference
+1. **Pipeline logs**: Stage-by-stage progress (Bronze→Silver→Gold→Training) with duration metrics
+2. **ML artifacts** stored under `data_clean/`:
+   - Gold features: `data_clean/gold/market/features/spx500_features.csv`
+   - Gold labels: `data_clean/gold/market/labels/spx500_labels_30min.csv`
+   - Trained models + metrics: `data_clean/models/xgboost_*`
+3. **MLflow UI** (http://localhost:5002, if started): experiment runs, metrics, parameters, artifacts
+4. **Streamlit Dashboard** (http://localhost:8501, if launched): visual inspection of features, metrics, and model outputs
 
 ## 📚 Complete System Demo
 
 30-minute end-to-end demo includes:
-- ✅ Data ingestion (Market + News simulator)
+- ✅ Data ingestion (Market + Hybrid news scraper)
 - ✅ Feature engineering (Bronze → Silver → Gold)
 - ✅ Model training with MLflow tracking
 - ✅ Interactive Streamlit dashboard
@@ -137,10 +107,9 @@ curl -X POST http://localhost:5001/api/stream/negative
 
 **Medallion Data Pipeline**:
 ```
-News Simulator → Bronze → Silver (TextBlob) → Gold (FinBERT) → Model → Inference → Monitoring
-      ↓            ↓           ↓                    ↓            ↓        ↓           ↓
-   5001 port    Raw      Preprocessing      Trading Signals   API   Dashboard   Evidently
-              Storage    Fast sentiment     Financial AI    8000    8501        8050
+Hybrid News Sources → Bronze → Silver (TextBlob) → Gold (FinBERT) → Model → Inference → Monitoring
+        ↓                ↓           ↓                    ↓            ↓        ↓           ↓
+  data_clean/bronze   Raw storage  Preprocessing     Trading signals   API   Dashboard   Evidently
 ```
 
 ## 🎨 Components
@@ -194,7 +163,6 @@ News Simulator → Bronze → Silver (TextBlob) → Gold (FinBERT) → Model →
 | **MLflow** | 5000 | Experiment tracking | http://localhost:5000 |
 | **Airflow** | 8080 | Workflow orchestration (Airflow 2.10.6) | http://localhost:8080 (admin/admin) |
 | **Evidently** | 8050 | Model monitoring | http://localhost:8050 |
-| **News Simulator** | 5001 | Test data generator | http://localhost:5001 |
 | **Model Servers** | 8001/8002 | Blue/Green deployments | http://localhost:8088 (via Nginx) |
 | **Feast** | 6566 | Feature store API | http://localhost:6566 |
 
@@ -410,22 +378,33 @@ head -10 data_clean/silver/news/sentiment/spx500_sentiment.csv | column -t -s,
 
 ### 1. Data Ingestion Demo
 ```bash
-# Start news simulator
-cd news-simulator && python app.py &
+# Collect recent S&P 500 news (incremental run with content fetching)
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+  --mode recent \
+  --sources gdelt \
+  --fetch-content \
+  --max-workers 1 \
+  --delay-between-requests 2.0
 
-# Stream 100 test articles (40 positive, 30 neutral, 30 negative)
-for i in {1..40}; do curl -X POST http://localhost:5001/api/stream/positive; done
-for i in {1..30}; do curl -X POST http://localhost:5001/api/stream/neutral; done
-for i in {1..30}; do curl -X POST http://localhost:5001/api/stream/negative; done
+# (Optional) Backfill a specific date range
+python src_clean/data_pipelines/bronze/hybrid_news_scraper.py \
+  --start-date 2025-01-01 \
+  --end-date 2025-10-26 \
+  --sources all \
+  --fetch-content \
+  --max-workers 1 \
+  --delay-between-requests 2.0
 
-# Articles automatically saved to data/news/bronze/simulated/
-# Copy to processing directory
-cp data/news/bronze/simulated/*.json data_clean/bronze/news/raw_articles/
-
-# Run sentiment analysis (Silver layer)
+# Generate Silver-layer sentiment features
 python src_clean/data_pipelines/silver/news_sentiment_processor.py \
-  --input data_clean/bronze/news/raw_articles/ \
-  --output data_clean/silver/news/sentiment/
+  --input-dir data_clean/bronze/news \
+  --output data_clean/silver/news/sentiment/spx500_sentiment.csv
+
+# Build Gold-layer FinBERT trading signals
+python src_clean/data_pipelines/gold/news_signal_builder.py \
+  --silver-sentiment data_clean/silver/news/sentiment/spx500_sentiment.csv \
+  --bronze-news data_clean/bronze/news \
+  --output data_clean/gold/news/signals/spx500_news_signals.csv
 ```
 
 ### 2. Training Demo
@@ -433,7 +412,7 @@ python src_clean/data_pipelines/silver/news_sentiment_processor.py \
 # Train with MLflow tracking
 python src_clean/training/xgboost_training_pipeline_mlflow.py \
   --market-features data_clean/gold/market/features/spx500_features.csv \
-  --news-signals data_clean/gold/news/signals/sp500_trading_signals.csv \
+  --news-signals data_clean/gold/news/signals/spx500_news_signals.csv \
   --prediction-horizon 30 \
   --experiment-name demo_experiment
 
@@ -456,9 +435,9 @@ wscat -c ws://localhost:8000/ws/market-stream
 
 ### 4. Orchestration Demo
 ```bash
-# Start Airflow (version 2.10.3)
-cd airflow_mlops
-docker compose up -d postgres-airflow airflow-web airflow-scheduler
+# Start Airflow (version 2.10.6)
+cd docker/airflow
+docker compose up -d airflow-scheduler airflow-webserver airflow-triggerer postgres redis
 
 # Access: http://localhost:8080
 # Login: admin / admin
@@ -522,42 +501,33 @@ docker-compose ps
 fx-ml-pipeline/
 ├── README.md                    # This file
 ├── requirements.txt             # Python 3.11 dependencies
+├── pyproject.toml               # Poetry-style project metadata
 │
-├── src_clean/                   # Production code
+├── src_clean/                   # Production code (Bronze → Silver → Gold → Training)
 │   ├── api/                     # FastAPI backend
 │   ├── ui/                      # Streamlit dashboards
-│   ├── data_pipelines/          # Bronze → Silver → Gold
-│   │   ├── bronze/              # Data collection
-│   │   ├── silver/              # Feature engineering
-│   │   └── gold/                # Training data prep
-│   ├── training/                # XGBoost training
-│   │   ├── xgboost_training_pipeline.py
-│   │   └── xgboost_training_pipeline_mlflow.py
-│   └── utils/                   # Shared utilities
+│   ├── data_pipelines/          # Data ingestion & feature engineering
+│   ├── training/                # Model training pipelines
+│   └── utils/                   # Shared helpers
 │
 ├── docker-compose.yml           # Unified Docker orchestration (root)
-├── docker/                      # Docker configurations
+├── docker/                      # Docker build contexts
+│   ├── airflow/                 # Airflow deployable image
 │   ├── api/                     # FastAPI Dockerfile
-│   ├── ui/                      # Streamlit Dockerfile
-│   ├── airflow/                 # Airflow Dockerfile
-│   ├── tasks/                   # Airflow task images
-│   │   ├── etl/                 # Data pipeline tasks
-│   │   ├── trainer/             # Model training tasks
-│   │   ├── dq/                  # Data quality checks
-│   │   └── model-server/        # Inference servers
-│   ├── monitoring/              # Evidently monitoring
-│   └── tools/                   # Utilities (news-simulator)
+│   ├── monitoring/              # Evidently monitoring containers
+│   ├── tasks/                   # Airflow task images (ETL, trainer, DQ, model-server)
+│   ├── tools/                   # Local developer utilities
+│   └── ui/                      # Streamlit Dockerfile
 │
-├── data_clean/                  # Medallion data architecture
-│   ├── bronze/                  # Raw data
-│   ├── silver/                  # Engineered features
-│   ├── gold/                    # Training-ready data
-│   └── models/                  # Trained XGBoost models
-│
-├── feature_repo/                # Feast feature store config
-├── airflow_mlops/               # Airflow DAGs & config
-├── news-simulator/              # News article generator
-└── archive/                     # Archived code & data
+├── configs/                     # Configuration files (YAML, JSON)
+├── data_clean/                  # Medallion data outputs (bronze/silver/gold/models)
+├── data_clean_5year/            # Sample 5-year datasets & trained models
+├── scripts/                     # Utility shell scripts
+├── tests/                       # Unit and integration tests
+├── logs/                        # Local run logs (gitignored)
+├── mlruns/                      # MLflow experiment store
+├── outputs/                     # Generated reports/plots (gitignored)
+└── archive/                     # Archived legacy code & assets
 ```
 
 ## 🔧 Requirements

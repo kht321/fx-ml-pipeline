@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir fastapi==0.115.0 uvicorn==0.30.6 pydantic==2.8.2
 COPY docker/tasks/model-server/app.py /app/app.py
