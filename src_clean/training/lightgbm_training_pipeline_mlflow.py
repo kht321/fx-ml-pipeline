@@ -1,43 +1,26 @@
 """
-XGBoost Training Pipeline - 30-Minute Price Prediction
+LightGBM Training Pipeline with MLflow Integration - 30-Minute Price Prediction
 
-Repository Location: fx-ml-pipeline/src_clean/training/xgboost_training_pipeline.py
-
-Purpose:
-    Trains XGBoost models to predict S&P 500 price movement in next 30 minutes.
-    Uses Gold layer features and labels (no label recreation).
-
-    ARCHITECTURAL IMPROVEMENTS (2025-10):
-    - ✓ Uses pre-computed Gold labels (no label recreation)
-    - ✓ Proper train/val/test/OOT splits (60/20/10/10)
-    - ✓ Model trained only on train+val, evaluated on unseen test+OOT
+Enhanced version with:
+- MLflow experiment tracking
+- Hyperparameter tuning (optional)
+- Model registry integration
+- Better model versioning
 
 Target Variable:
-    - Binary classification: Price up/down in next 30 minutes
-    - Regression: Percentage returns (stationary target)
+- Classification: Predicts direction (Up=1, Down=0)
+- Regression: Predicts percentage returns (not absolute price difference)
 
-Features:
-    - Market: Technical indicators, microstructure, volatility
-    - News: Sentiment signals, trading signals (optional)
+Why percentage returns?
+- Prevents naive persistence (model learning yt = yt-1)
+- Stationary target variable
+- Scale-independent (works across different price levels)
+- Directly interpretable for trading (% gain/loss)
 
-Output:
-    - Trained XGBoost model (pkl file)
-    - Feature importance rankings
-    - Evaluation metrics on Train/Val/Test/OOT splits
-    - Training visualizations
+To convert regression predictions back to price:
+    predicted_price = current_price * (1 + predicted_return)
 
-Usage:
-    # Auto-infer labels path
-    python src_clean/training/xgboost_training_pipeline.py \\
-        --market-features data_clean/gold/market/features/spx500_features.csv \\
-        --prediction-horizon 30 \\
-        --task classification
-
-    # Explicit labels path
-    python src_clean/training/xgboost_training_pipeline.py \\
-        --market-features data_clean/gold/market/features/spx500_features.csv \\
-        --labels data_clean/gold/market/labels/spx500_labels_30min.csv \\
-        --task classification
+Repository Location: fx-ml-pipeline/src_clean/training/lightgbm_training_pipeline_mlflow.py
 """
 
 import argparse
@@ -50,8 +33,8 @@ import sys
 
 import numpy as np
 import pandas as pd
-import xgboost as xgb
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+import lightgbm as lgb
+from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
 from sklearn.metrics import (
     classification_report, confusion_matrix, roc_auc_score,
     accuracy_score, precision_recall_fscore_support, roc_curve
@@ -59,6 +42,9 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 import seaborn as sns
 from joblib import dump
+import mlflow
+import mlflow.lightgbm
+import mlflow.sklearn
 
 # Setup logging
 logging.basicConfig(
@@ -68,8 +54,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class XGBoostTrainingPipeline:
-    """Training pipeline for XGBoost price prediction models."""
+class LightGBMMLflowTrainingPipeline:
+    """Training pipeline for LightGBM with MLflow tracking."""
 
     def __init__(
         self,
@@ -78,10 +64,12 @@ class XGBoostTrainingPipeline:
         news_signals_path: Optional[Path] = None,
         prediction_horizon_minutes: int = 30,
         output_dir: Path = Path("data_clean/models"),
-        task: str = "classification"
+        task: str = "classification",
+        experiment_name: str = "sp500_prediction_lightgbm",
+        enable_tuning: bool = False
     ):
         """
-        Initialize training pipeline.
+        Initialize training pipeline with MLflow.
 
         Parameters
         ----------
@@ -97,6 +85,10 @@ class XGBoostTrainingPipeline:
             Directory to save trained models and outputs
         task : str
             'classification' or 'regression'
+        experiment_name : str
+            MLflow experiment name
+        enable_tuning : bool
+            Enable hyperparameter tuning
         """
         self.market_features_path = market_features_path
         self.labels_path = labels_path
@@ -104,33 +96,49 @@ class XGBoostTrainingPipeline:
         self.prediction_horizon = prediction_horizon_minutes
         self.output_dir = output_dir
         self.task = task
+        self.experiment_name = experiment_name
+        self.enable_tuning = enable_tuning
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Set up MLflow
+        mlflow.set_experiment(experiment_name)
+
         # Model configuration
-        self.xgb_params = {
+        self.lgb_params = {
             "classification": {
-                "objective": "binary:logistic",
-                "eval_metric": "auc",
-                "max_depth": 6,
+                "objective": "binary",
+                "metric": "auc",
+                "boosting_type": "gbdt",
+                "num_leaves": 31,
                 "learning_rate": 0.1,
                 "n_estimators": 200,
                 "subsample": 0.8,
                 "colsample_bytree": 0.8,
                 "random_state": 42,
-                "tree_method": "hist"
+                "verbosity": -1
             },
             "regression": {
-                "objective": "reg:squarederror",
-                "eval_metric": "rmse",
-                "max_depth": 6,
+                "objective": "regression",
+                "metric": "rmse",
+                "boosting_type": "gbdt",
+                "num_leaves": 31,
                 "learning_rate": 0.1,
                 "n_estimators": 200,
                 "subsample": 0.8,
                 "colsample_bytree": 0.8,
                 "random_state": 42,
-                "tree_method": "hist"
+                "verbosity": -1
             }
+        }
+
+        # Hyperparameter search space
+        self.param_grid = {
+            "num_leaves": [15, 31, 63],
+            "learning_rate": [0.01, 0.1, 0.3],
+            "n_estimators": [100, 200, 300],
+            "subsample": [0.8, 0.9],
+            "colsample_bytree": [0.8, 0.9]
         }
 
     def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -155,7 +163,7 @@ class XGBoostTrainingPipeline:
         if not self.labels_path.exists():
             raise FileNotFoundError(
                 f"Labels file not found: {self.labels_path}\n"
-                f"Please run label_generator.py first or provide --labels"
+                f"Please run label_generator.py first or provide --labels-path"
             )
 
         labels_df = pd.read_csv(self.labels_path)
@@ -226,18 +234,7 @@ class XGBoostTrainingPipeline:
         news_df: Optional[pd.DataFrame],
         tolerance_hours: int = 6
     ) -> pd.DataFrame:
-        """
-        Merge market features with news signals using as-of join.
-
-        Parameters
-        ----------
-        market_df : pd.DataFrame
-            Market features with 'time' column
-        news_df : pd.DataFrame, optional
-            News signals with 'signal_time' column
-        tolerance_hours : int
-            Maximum lookback window for news (hours)
-        """
+        """Merge market features with news signals using as-of join."""
         if news_df is None or news_df.empty:
             logger.info("No news data - using market features only")
             return market_df
@@ -247,11 +244,9 @@ class XGBoostTrainingPipeline:
         merged_rows = []
         tolerance = pd.Timedelta(hours=tolerance_hours)
 
-        # Sort both dataframes
         market_df = market_df.sort_values('time')
         news_df = news_df.sort_values('signal_time')
 
-        # Rename news columns to avoid conflicts
         news_features = [
             'signal_time', 'avg_sentiment', 'signal_strength',
             'trading_signal', 'article_count', 'quality_score'
@@ -260,8 +255,6 @@ class XGBoostTrainingPipeline:
 
         for _, market_row in market_df.iterrows():
             market_time = market_row['time']
-
-            # Find most recent news within tolerance
             news_cutoff = market_time - tolerance
             eligible_news = news_df[
                 (news_df['signal_time'] <= market_time) &
@@ -272,21 +265,16 @@ class XGBoostTrainingPipeline:
 
             if not eligible_news.empty:
                 latest_news = eligible_news.iloc[-1]
-
-                # Add news features with 'news_' prefix
                 for col in available_news:
                     if col != 'signal_time':
                         merged_row[f'news_{col}'] = latest_news[col]
-
                 news_age_minutes = (market_time - latest_news['signal_time']).total_seconds() / 60
                 merged_row['news_age_minutes'] = news_age_minutes
                 merged_row['news_available'] = 1
             else:
-                # No news available - use neutral defaults
                 for col in available_news:
                     if col != 'signal_time':
                         merged_row[f'news_{col}'] = 0.0
-
                 merged_row['news_age_minutes'] = np.nan
                 merged_row['news_available'] = 0
 
@@ -300,21 +288,8 @@ class XGBoostTrainingPipeline:
 
         return combined_df
 
-    def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, pd.Series, list]:
-        """
-        Prepare features for training, preserving time index for splits.
-
-        Returns
-        -------
-        X : pd.DataFrame
-            Feature matrix
-        y : pd.Series
-            Target variable
-        time_index : pd.Series
-            Time column for temporal splits
-        feature_names : list
-            List of feature names
-        """
+    def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, pd.Index, list]:
+        """Prepare features for training, preserving time index for splits."""
         logger.info("Preparing features...")
 
         # Exclude all label-related and metadata columns
@@ -431,18 +406,9 @@ class XGBoostTrainingPipeline:
         y: pd.Series,
         time_index: pd.Series,
         feature_names: list
-    ) -> Tuple[xgb.XGBModel, Dict]:
-        """
-        Train XGBoost model with proper train/val/test/OOT splits.
-
-        Returns
-        -------
-        model : xgb.XGBModel
-            Trained model
-        metrics : dict
-            Training and evaluation metrics on all splits
-        """
-        logger.info("Training XGBoost model...")
+    ) -> Tuple[lgb.LGBMModel, Dict]:
+        """Train LightGBM model with proper train/val/test/OOT splits and MLflow tracking."""
+        logger.info("Training LightGBM model with MLflow tracking...")
 
         # Create temporal splits
         splits = self.split_train_val_test_oot(X, y, time_index)
@@ -460,81 +426,121 @@ class XGBoostTrainingPipeline:
         X_oot = X.loc[splits['oot_idx']]
         y_oot = y.loc[splits['oot_idx']]
 
-        # Combine train+val for cross-validation and final training
+        # Combine train+val for cross-validation
         X_train_val = pd.concat([X_train, X_val])
         y_train_val = pd.concat([y_train, y_val])
 
-        # Time series split (respects temporal order) - only on train+val
-        tscv = TimeSeriesSplit(n_splits=5)
+        # Start MLflow run
+        with mlflow.start_run():
+            # Log parameters
+            mlflow.log_param("model_type", "lightgbm")
+            mlflow.log_param("prediction_horizon_minutes", self.prediction_horizon)
+            mlflow.log_param("task_type", self.task)
+            mlflow.log_param("n_total_samples", len(X))
+            mlflow.log_param("n_train_samples", len(X_train))
+            mlflow.log_param("n_val_samples", len(X_val))
+            mlflow.log_param("n_test_samples", len(X_test))
+            mlflow.log_param("n_oot_samples", len(X_oot))
+            mlflow.log_param("n_features", len(feature_names))
+            mlflow.log_param("news_available", 'news_available' in X.columns)
 
-        # Initialize model
-        if self.task == "classification":
-            model = xgb.XGBClassifier(**self.xgb_params["classification"])
-        else:
-            model = xgb.XGBRegressor(**self.xgb_params["regression"])
+            # Time series split for CV (only on train+val)
+            tscv = TimeSeriesSplit(n_splits=5)
 
-        # Cross-validation on train+val
-        logger.info("Performing time series cross-validation on train+val...")
-        cv_scores = []
-
-        for fold, (train_idx, val_idx) in enumerate(tscv.split(X_train_val), 1):
-            X_cv_train = X_train_val.iloc[train_idx]
-            y_cv_train = y_train_val.iloc[train_idx]
-            X_cv_val = X_train_val.iloc[val_idx]
-            y_cv_val = y_train_val.iloc[val_idx]
-
-            # Train on this fold
-            model.fit(X_cv_train, y_cv_train, eval_set=[(X_cv_val, y_cv_val)], verbose=False)
-
-            # Evaluate
-            if self.task == "classification":
-                y_pred_proba = model.predict_proba(X_cv_val)[:, 1]
-                score = roc_auc_score(y_cv_val, y_pred_proba)
-                logger.info(f"  Fold {fold} AUC: {score:.4f}")
+            if self.enable_tuning:
+                logger.info("Performing hyperparameter tuning on train+val...")
+                model = self._tune_hyperparameters(X_train_val, y_train_val, tscv)
             else:
-                y_pred = model.predict(X_cv_val)
-                score = np.sqrt(np.mean((y_cv_val - y_pred) ** 2))
-                logger.info(f"  Fold {fold} RMSE: {score:.4f}")
+                # Use default parameters
+                if self.task == "classification":
+                    model = lgb.LGBMClassifier(**self.lgb_params["classification"])
+                else:
+                    model = lgb.LGBMRegressor(**self.lgb_params["regression"])
 
-            cv_scores.append(score)
+                # Log model parameters
+                mlflow.log_params(self.lgb_params[self.task])
 
-        logger.info(f"CV Mean: {np.mean(cv_scores):.4f} (+/- {np.std(cv_scores):.4f})")
+            # Cross-validation on train+val
+            logger.info("Performing time series cross-validation on train+val...")
+            cv_scores = []
 
-        # Train final model on train+val only (NOT entire dataset!)
-        logger.info("Training final model on train+val...")
-        model.fit(X_train_val, y_train_val, verbose=False)
+            for fold, (train_idx, val_idx) in enumerate(tscv.split(X_train_val), 1):
+                X_cv_train = X_train_val.iloc[train_idx]
+                y_cv_train = y_train_val.iloc[train_idx]
+                X_cv_val = X_train_val.iloc[val_idx]
+                y_cv_val = y_train_val.iloc[val_idx]
 
-        # Evaluate on all splits
-        logger.info("\n" + "="*80)
-        logger.info("EVALUATION ON ALL SPLITS")
-        logger.info("="*80)
+                model.fit(X_cv_train, y_cv_train, eval_set=[(X_cv_val, y_cv_val)])
 
-        train_metrics = self._evaluate_model(model, X_train, y_train, prefix="train")
-        logger.info(f"Train: {self._format_metrics(train_metrics)}")
+                if self.task == "classification":
+                    y_pred_proba = model.predict_proba(X_cv_val)[:, 1]
+                    score = roc_auc_score(y_cv_val, y_pred_proba)
+                    logger.info(f"  Fold {fold} AUC: {score:.4f}")
+                else:
+                    y_pred = model.predict(X_cv_val)
+                    score = np.sqrt(np.mean((y_cv_val - y_pred) ** 2))
+                    logger.info(f"  Fold {fold} RMSE: {score:.4f}")
 
-        val_metrics = self._evaluate_model(model, X_val, y_val, prefix="val")
-        logger.info(f"Val:   {self._format_metrics(val_metrics)}")
+                cv_scores.append(score)
+                mlflow.log_metric(f"cv_fold_{fold}_score", score)
 
-        test_metrics = self._evaluate_model(model, X_test, y_test, prefix="test")
-        logger.info(f"Test:  {self._format_metrics(test_metrics)}")
+            cv_mean = np.mean(cv_scores)
+            cv_std = np.std(cv_scores)
+            logger.info(f"CV Mean: {cv_mean:.4f} (+/- {cv_std:.4f})")
 
-        oot_metrics = self._evaluate_model(model, X_oot, y_oot, prefix="oot")
-        logger.info(f"OOT:   {self._format_metrics(oot_metrics)}")
+            mlflow.log_metric("cv_mean", cv_mean)
+            mlflow.log_metric("cv_std", cv_std)
 
-        # Aggregate all metrics
-        metrics = {
-            'cv_scores': cv_scores,
-            'cv_mean': float(np.mean(cv_scores)),
-            'cv_std': float(np.std(cv_scores)),
-            **train_metrics,
-            **val_metrics,
-            **test_metrics,
-            **oot_metrics
-        }
+            # Train final model on train+val
+            logger.info("Training final model on train+val...")
+            model.fit(X_train_val, y_train_val)
 
-        logger.info("="*80 + "\n")
+            # Evaluate on all splits
+            logger.info("\n" + "="*80)
+            logger.info("EVALUATION ON ALL SPLITS")
+            logger.info("="*80)
 
-        return model, metrics
+            train_metrics = self._evaluate_model(model, X_train, y_train, prefix="train")
+            logger.info(f"Train: {self._format_metrics(train_metrics)}")
+
+            val_metrics = self._evaluate_model(model, X_val, y_val, prefix="val")
+            logger.info(f"Val:   {self._format_metrics(val_metrics)}")
+
+            test_metrics = self._evaluate_model(model, X_test, y_test, prefix="test")
+            logger.info(f"Test:  {self._format_metrics(test_metrics)}")
+
+            oot_metrics = self._evaluate_model(model, X_oot, y_oot, prefix="oot")
+            logger.info(f"OOT:   {self._format_metrics(oot_metrics)}")
+
+            # Aggregate all metrics
+            metrics = {
+                'cv_scores': cv_scores,
+                'cv_mean': float(cv_mean),
+                'cv_std': float(cv_std),
+                **train_metrics,
+                **val_metrics,
+                **test_metrics,
+                **oot_metrics
+            }
+
+            # Log all metrics to MLflow
+            for key, value in metrics.items():
+                if isinstance(value, (int, float)):
+                    mlflow.log_metric(key, value)
+
+            # Log model to MLflow
+            mlflow.lightgbm.log_model(model, "model")
+
+            # Log feature names
+            mlflow.log_dict({"features": feature_names}, "features.json")
+
+            # Save feature importance plot
+            self._plot_feature_importance_mlflow(model, feature_names)
+
+            logger.info(f"\nMLflow run ID: {mlflow.active_run().info.run_id}")
+            logger.info("="*80 + "\n")
+
+            return model, metrics
 
     def _format_metrics(self, metrics: Dict) -> str:
         """Format metrics for logging."""
@@ -551,7 +557,48 @@ class XGBoostTrainingPipeline:
                               metrics.get('test_mae', metrics.get('oot_mae', 0)))))
             return f"RMSE={rmse:.4f}, MAE={mae:.4f}"
 
-    def _evaluate_model(self, model: xgb.XGBModel, X: pd.DataFrame, y: pd.Series, prefix: str = "") -> Dict:
+    def _tune_hyperparameters(self, X, y, tscv):
+        """Perform hyperparameter tuning with GridSearchCV."""
+        logger.info("Tuning hyperparameters...")
+
+        if self.task == "classification":
+            base_model = lgb.LGBMClassifier(
+                objective="binary",
+                metric="auc",
+                random_state=42,
+                verbosity=-1
+            )
+            scoring = 'roc_auc'
+        else:
+            base_model = lgb.LGBMRegressor(
+                objective="regression",
+                metric="rmse",
+                random_state=42,
+                verbosity=-1
+            )
+            scoring = 'neg_root_mean_squared_error'
+
+        grid_search = GridSearchCV(
+            base_model,
+            self.param_grid,
+            cv=tscv,
+            scoring=scoring,
+            n_jobs=-1,
+            verbose=1
+        )
+
+        grid_search.fit(X, y)
+
+        logger.info(f"Best parameters: {grid_search.best_params_}")
+        logger.info(f"Best score: {grid_search.best_score_:.4f}")
+
+        # Log best parameters
+        mlflow.log_params(grid_search.best_params_)
+        mlflow.log_metric("best_cv_score", grid_search.best_score_)
+
+        return grid_search.best_estimator_
+
+    def _evaluate_model(self, model: lgb.LGBMModel, X: pd.DataFrame, y: pd.Series, prefix: str = "") -> Dict:
         """Evaluate model and return metrics with optional prefix."""
         if self.task == "classification":
             y_pred = model.predict(X)
@@ -581,17 +628,37 @@ class XGBoostTrainingPipeline:
 
         return metrics
 
+    def _plot_feature_importance_mlflow(self, model: lgb.LGBMModel, feature_names: list):
+        """Plot and log feature importance to MLflow."""
+        importance_df = pd.DataFrame({
+            'feature': feature_names,
+            'importance': model.feature_importances_
+        }).sort_values('importance', ascending=False)
+
+        plt.figure(figsize=(10, 8))
+        sns.barplot(data=importance_df.head(20), x='importance', y='feature')
+        plt.title(f'Top 20 Feature Importance - {self.task} (LightGBM)')
+        plt.xlabel('Importance Score')
+        plt.ylabel('Feature')
+        plt.tight_layout()
+
+        mlflow.log_figure(plt.gcf(), "feature_importance.png")
+        plt.close()
+
+        # Log importance CSV
+        mlflow.log_dict(importance_df.to_dict('records'), "feature_importance.json")
+
     def save_model_and_artifacts(
         self,
-        model: xgb.XGBModel,
+        model: lgb.LGBMModel,
         feature_names: list,
         metrics: Dict
     ):
-        """Save trained model, metrics, and visualizations."""
-        logger.info("Saving model and artifacts...")
+        """Save trained model (in addition to MLflow)."""
+        logger.info("Saving model artifacts locally...")
 
         timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        model_name = f"xgboost_{self.task}_{self.prediction_horizon}min_{timestamp}"
+        model_name = f"lightgbm_{self.task}_{self.prediction_horizon}min_{timestamp}"
 
         # Save model
         model_path = self.output_dir / f"{model_name}.pkl"
@@ -609,45 +676,10 @@ class XGBoostTrainingPipeline:
             json.dump(metrics, f, indent=2, default=str)
         logger.info(f"  Metrics saved: {metrics_path}")
 
-        # Save feature importance
-        self._plot_feature_importance(model, feature_names, model_name)
-
-        logger.info(f"  All artifacts saved to: {self.output_dir}")
-
-    def _plot_feature_importance(
-        self,
-        model: xgb.XGBModel,
-        feature_names: list,
-        model_name: str
-    ):
-        """Plot and save feature importance."""
-        importance_df = pd.DataFrame({
-            'feature': feature_names,
-            'importance': model.feature_importances_
-        }).sort_values('importance', ascending=False)
-
-        # Save CSV
-        importance_path = self.output_dir / f"{model_name}_feature_importance.csv"
-        importance_df.to_csv(importance_path, index=False)
-
-        # Plot top 20 features
-        plt.figure(figsize=(10, 8))
-        sns.barplot(data=importance_df.head(20), x='importance', y='feature')
-        plt.title(f'Top 20 Feature Importance - {model_name}')
-        plt.xlabel('Importance Score')
-        plt.ylabel('Feature')
-        plt.tight_layout()
-
-        plot_path = self.output_dir / f"{model_name}_feature_importance.png"
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
-
-        logger.info(f"  Feature importance plot: {plot_path}")
-
     def run(self):
-        """Execute the full training pipeline."""
+        """Execute the full training pipeline with MLflow."""
         logger.info("\n" + "="*80)
-        logger.info(f"XGBoost Training Pipeline - {self.prediction_horizon}min Prediction")
+        logger.info(f"LightGBM Training Pipeline with MLflow - {self.prediction_horizon}min Prediction")
         logger.info("="*80 + "\n")
 
         # Load data (market features + gold labels)
@@ -672,6 +704,7 @@ class XGBoostTrainingPipeline:
         logger.info("\n" + "="*80)
         logger.info("TRAINING COMPLETE")
         logger.info("="*80)
+        logger.info(f"Model: LightGBM")
         logger.info(f"Task: {self.task}")
         logger.info(f"Prediction horizon: {self.prediction_horizon} minutes")
         logger.info(f"Total samples: {len(X)}")
@@ -689,6 +722,7 @@ class XGBoostTrainingPipeline:
                        f"MAE: {metrics.get('oot_mae', 0):.4f}")
 
         logger.info(f"\nModel saved to: {self.output_dir}")
+        logger.info(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
         logger.info("="*80 + "\n")
 
 
@@ -729,16 +763,38 @@ def main():
         default=Path("data_clean/models"),
         help="Output directory for models"
     )
+    parser.add_argument(
+        "--experiment-name",
+        type=str,
+        default="sp500_prediction_lightgbm",
+        help="MLflow experiment name"
+    )
+    parser.add_argument(
+        "--enable-tuning",
+        action="store_true",
+        help="Enable hyperparameter tuning"
+    )
+    parser.add_argument(
+        "--mlflow-uri",
+        type=str,
+        default="mlruns",
+        help="MLflow tracking URI"
+    )
 
     args = parser.parse_args()
 
-    pipeline = XGBoostTrainingPipeline(
+    # Set MLflow tracking URI
+    mlflow.set_tracking_uri(args.mlflow_uri)
+
+    pipeline = LightGBMMLflowTrainingPipeline(
         market_features_path=args.market_features,
         labels_path=args.labels,
         news_signals_path=args.news_signals,
         prediction_horizon_minutes=args.prediction_horizon,
         output_dir=args.output_dir,
-        task=args.task
+        task=args.task,
+        experiment_name=args.experiment_name,
+        enable_tuning=args.enable_tuning
     )
 
     pipeline.run()

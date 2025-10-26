@@ -60,7 +60,8 @@ class XGBoostMLflowTrainingPipeline:
     def __init__(
         self,
         market_features_path: Path,
-        news_signals_path: Optional[Path],
+        labels_path: Optional[Path] = None,
+        news_signals_path: Optional[Path] = None,
         prediction_horizon_minutes: int = 30,
         output_dir: Path = Path("data_clean/models"),
         task: str = "classification",
@@ -74,6 +75,8 @@ class XGBoostMLflowTrainingPipeline:
         ----------
         market_features_path : Path
             Path to Gold layer market features CSV
+        labels_path : Path, optional
+            Path to Gold layer labels CSV (if not provided, will be inferred)
         news_signals_path : Path, optional
             Path to Gold layer news signals CSV
         prediction_horizon_minutes : int
@@ -88,6 +91,7 @@ class XGBoostMLflowTrainingPipeline:
             Enable hyperparameter tuning
         """
         self.market_features_path = market_features_path
+        self.labels_path = labels_path
         self.news_signals_path = news_signals_path
         self.prediction_horizon = prediction_horizon_minutes
         self.output_dir = output_dir
@@ -136,13 +140,61 @@ class XGBoostMLflowTrainingPipeline:
         }
 
     def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Load market features and news signals."""
-        logger.info("Loading data...")
+        """Load market features, labels, and news signals from Gold layer."""
+        logger.info("Loading data from Gold layer...")
 
         # Load market features
         market_df = pd.read_csv(self.market_features_path)
         market_df['time'] = pd.to_datetime(market_df['time'])
         logger.info(f"Loaded market features: {len(market_df)} rows, {len(market_df.columns)} columns")
+
+        # Load or infer labels path
+        if self.labels_path is None:
+            # Infer labels path from features path
+            # data_clean/gold/market/features/spx500_features.csv -> data_clean/gold/market/labels/spx500_labels_30min.csv
+            features_dir = self.market_features_path.parent
+            base_dir = features_dir.parent.parent.parent  # Go up to data_clean
+            instrument = self.market_features_path.stem.replace('_features', '')
+            self.labels_path = base_dir / f"gold/market/labels/{instrument}_labels_{self.prediction_horizon}min.csv"
+            logger.info(f"Inferred labels path: {self.labels_path}")
+
+        # Load labels
+        if not self.labels_path.exists():
+            raise FileNotFoundError(
+                f"Labels file not found: {self.labels_path}\n"
+                f"Please run label_generator.py first or provide --labels-path"
+            )
+
+        labels_df = pd.read_csv(self.labels_path)
+        labels_df['time'] = pd.to_datetime(labels_df['time'])
+        logger.info(f"Loaded gold labels: {len(labels_df)} rows, {len(labels_df.columns)} columns")
+
+        # Verify label prediction horizon matches
+        if 'prediction_horizon_minutes' in labels_df.columns:
+            label_horizon = labels_df['prediction_horizon_minutes'].iloc[0]
+            if label_horizon != self.prediction_horizon:
+                logger.warning(
+                    f"Label horizon ({label_horizon}min) != requested horizon ({self.prediction_horizon}min). "
+                    f"Using labels with {label_horizon}min horizon."
+                )
+                self.prediction_horizon = int(label_horizon)
+
+        # Merge market features with labels on time
+        logger.info("Merging market features with gold labels...")
+        merged_df = pd.merge(
+            market_df,
+            labels_df[['time', 'target_classification', 'target_regression', 'target_pct_change', 'fold']],
+            on='time',
+            how='inner'
+        )
+        logger.info(f"Merged dataset: {len(merged_df)} rows after merging")
+
+        # Map task to appropriate target column
+        if self.task == "classification":
+            merged_df['target'] = merged_df['target_classification']
+        else:
+            # For regression, use percentage change (stationary)
+            merged_df['target'] = merged_df['target_pct_change']
 
         # Load news signals if available
         news_df = None
@@ -153,29 +205,19 @@ class XGBoostMLflowTrainingPipeline:
         else:
             logger.warning("No news signals provided - using market features only")
 
-        return market_df, news_df
+        return merged_df, news_df
 
-    def create_labels(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Create target labels for prediction."""
-        logger.info(f"Creating labels for {self.prediction_horizon}-minute prediction...")
+    def validate_labels(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Validate that labels are present and log statistics."""
+        logger.info(f"Validating labels for {self.prediction_horizon}-minute prediction...")
 
-        df = df.sort_values('time').reset_index(drop=True)
+        if 'target' not in df.columns:
+            raise ValueError("Target column not found in dataframe. Labels should be loaded from Gold layer.")
 
-        # Calculate future price
-        df['future_close'] = df['close'].shift(-self.prediction_horizon)
-
-        if self.task == "classification":
-            # Classification: predict direction (up/down)
-            df['target'] = (df['future_close'] > df['close']).astype(int)
-        else:
-            # Regression: predict percentage returns (not absolute price difference)
-            # This prevents the model from learning naive persistence (yt = yt-1)
-            df['target'] = (df['future_close'] - df['close']) / df['close']
-            logger.info(f"Predicting percentage returns (stationary target)")
-
+        # Remove any rows with missing targets
         df = df.dropna(subset=['target'])
 
-        logger.info(f"Created labels: {len(df)} valid samples")
+        logger.info(f"Valid samples with labels: {len(df)}")
 
         if self.task == "classification":
             value_counts = df['target'].value_counts()
@@ -245,20 +287,24 @@ class XGBoostMLflowTrainingPipeline:
 
         return combined_df
 
-    def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, list]:
-        """Prepare features for training."""
+    def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, pd.Index, list]:
+        """Prepare features for training, preserving time index for splits."""
         logger.info("Preparing features...")
 
+        # Exclude all label-related and metadata columns
         exclude_cols = {
-            'time', 'instrument', 'granularity',
-            'target', 'future_close', 'signal_time',
-            'collected_at', 'event_timestamp'
+            'time', 'instrument', 'granularity', 'close',
+            'target', 'target_classification', 'target_regression',
+            'target_pct_change', 'target_multiclass', 'future_close',
+            'signal_time', 'collected_at', 'event_timestamp',
+            'prediction_horizon_minutes', 'label_generated_at', 'fold'
         }
 
         feature_cols = [c for c in df.columns if c not in exclude_cols]
 
         X = df[feature_cols].copy()
         y = df['target'].copy()
+        time_index = df['time'].copy()  # Preserve time for temporal splits
 
         # Handle categorical columns
         categorical_cols = X.select_dtypes(include=['object', 'bool']).columns
@@ -276,32 +322,132 @@ class XGBoostMLflowTrainingPipeline:
 
         logger.info(f"Final feature set: {len(X.columns)} features, {len(X)} samples")
 
-        return X, y, list(X.columns)
+        return X, y, time_index, list(X.columns)
+
+    def split_train_val_test_oot(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        time_index: pd.Series,
+        train_ratio: float = 0.60,
+        val_ratio: float = 0.20,
+        test_ratio: float = 0.10,
+        oot_ratio: float = 0.10
+    ) -> Dict:
+        """
+        Create time-based splits for Train/Val/Test/OOT.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Features
+        y : pd.Series
+            Target variable
+        time_index : pd.Series
+            Time column for temporal ordering
+        train_ratio : float
+            Proportion for training (default: 0.60)
+        val_ratio : float
+            Proportion for validation (default: 0.20)
+        test_ratio : float
+            Proportion for test set (default: 0.10)
+        oot_ratio : float
+            Proportion for out-of-time holdout (default: 0.10)
+
+        Returns
+        -------
+        dict
+            Dictionary with train/val/test/oot indices and date ranges
+        """
+        logger.info("\n" + "="*80)
+        logger.info("TEMPORAL DATA SPLITTING")
+        logger.info("="*80)
+
+        # Sort by time
+        sorted_idx = time_index.sort_values().index
+        X_sorted = X.loc[sorted_idx]
+        y_sorted = y.loc[sorted_idx]
+        time_sorted = time_index.loc[sorted_idx]
+
+        n = len(X_sorted)
+        train_end = int(n * train_ratio)
+        val_end = int(n * (train_ratio + val_ratio))
+        test_end = int(n * (train_ratio + val_ratio + test_ratio))
+
+        splits = {
+            'train_idx': X_sorted.index[:train_end],
+            'val_idx': X_sorted.index[train_end:val_end],
+            'test_idx': X_sorted.index[val_end:test_end],
+            'oot_idx': X_sorted.index[test_end:],
+            'train_dates': (time_sorted.iloc[0], time_sorted.iloc[train_end-1]),
+            'val_dates': (time_sorted.iloc[train_end], time_sorted.iloc[val_end-1]),
+            'test_dates': (time_sorted.iloc[val_end], time_sorted.iloc[test_end-1]),
+            'oot_dates': (time_sorted.iloc[test_end], time_sorted.iloc[-1])
+        }
+
+        # Log split information
+        logger.info(f"Total samples: {n}")
+        logger.info(f"Train: {len(splits['train_idx'])} samples ({train_ratio*100:.0f}%) | "
+                   f"{splits['train_dates'][0]} to {splits['train_dates'][1]}")
+        logger.info(f"Val:   {len(splits['val_idx'])} samples ({val_ratio*100:.0f}%) | "
+                   f"{splits['val_dates'][0]} to {splits['val_dates'][1]}")
+        logger.info(f"Test:  {len(splits['test_idx'])} samples ({test_ratio*100:.0f}%) | "
+                   f"{splits['test_dates'][0]} to {splits['test_dates'][1]}")
+        logger.info(f"OOT:   {len(splits['oot_idx'])} samples ({oot_ratio*100:.0f}%) | "
+                   f"{splits['oot_dates'][0]} to {splits['oot_dates'][1]}")
+        logger.info("="*80 + "\n")
+
+        return splits
 
     def train_model(
         self,
         X: pd.DataFrame,
         y: pd.Series,
+        time_index: pd.Series,
         feature_names: list
     ) -> Tuple[xgb.XGBModel, Dict]:
-        """Train XGBoost model with MLflow tracking."""
+        """Train XGBoost model with proper train/val/test/OOT splits and MLflow tracking."""
         logger.info("Training XGBoost model with MLflow tracking...")
+
+        # Create temporal splits
+        splits = self.split_train_val_test_oot(X, y, time_index)
+
+        # Extract split data
+        X_train = X.loc[splits['train_idx']]
+        y_train = y.loc[splits['train_idx']]
+
+        X_val = X.loc[splits['val_idx']]
+        y_val = y.loc[splits['val_idx']]
+
+        X_test = X.loc[splits['test_idx']]
+        y_test = y.loc[splits['test_idx']]
+
+        X_oot = X.loc[splits['oot_idx']]
+        y_oot = y.loc[splits['oot_idx']]
+
+        # Combine train+val for cross-validation
+        X_train_val = pd.concat([X_train, X_val])
+        y_train_val = pd.concat([y_train, y_val])
 
         # Start MLflow run
         with mlflow.start_run():
             # Log parameters
             mlflow.log_param("prediction_horizon_minutes", self.prediction_horizon)
             mlflow.log_param("task_type", self.task)
-            mlflow.log_param("n_samples", len(X))
+            mlflow.log_param("n_total_samples", len(X))
+            mlflow.log_param("n_train_samples", len(X_train))
+            mlflow.log_param("n_val_samples", len(X_val))
+            mlflow.log_param("n_test_samples", len(X_test))
+            mlflow.log_param("n_oot_samples", len(X_oot))
             mlflow.log_param("n_features", len(feature_names))
             mlflow.log_param("news_available", 'news_available' in X.columns)
 
-            # Time series split
+            # Time series split for CV (only on train+val)
             tscv = TimeSeriesSplit(n_splits=5)
 
             if self.enable_tuning:
-                logger.info("Performing hyperparameter tuning...")
-                model = self._tune_hyperparameters(X, y, tscv)
+                logger.info("Performing hyperparameter tuning on train+val...")
+                model = self._tune_hyperparameters(X_train_val, y_train_val, tscv)
             else:
                 # Use default parameters
                 if self.task == "classification":
@@ -312,23 +458,25 @@ class XGBoostMLflowTrainingPipeline:
                 # Log model parameters
                 mlflow.log_params(self.xgb_params[self.task])
 
-            # Cross-validation
-            logger.info("Performing time series cross-validation...")
+            # Cross-validation on train+val
+            logger.info("Performing time series cross-validation on train+val...")
             cv_scores = []
 
-            for fold, (train_idx, val_idx) in enumerate(tscv.split(X), 1):
-                X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-                y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+            for fold, (train_idx, val_idx) in enumerate(tscv.split(X_train_val), 1):
+                X_cv_train = X_train_val.iloc[train_idx]
+                y_cv_train = y_train_val.iloc[train_idx]
+                X_cv_val = X_train_val.iloc[val_idx]
+                y_cv_val = y_train_val.iloc[val_idx]
 
-                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+                model.fit(X_cv_train, y_cv_train, eval_set=[(X_cv_val, y_cv_val)], verbose=False)
 
                 if self.task == "classification":
-                    y_pred_proba = model.predict_proba(X_val)[:, 1]
-                    score = roc_auc_score(y_val, y_pred_proba)
+                    y_pred_proba = model.predict_proba(X_cv_val)[:, 1]
+                    score = roc_auc_score(y_cv_val, y_pred_proba)
                     logger.info(f"  Fold {fold} AUC: {score:.4f}")
                 else:
-                    y_pred = model.predict(X_val)
-                    score = np.sqrt(np.mean((y_val - y_pred) ** 2))
+                    y_pred = model.predict(X_cv_val)
+                    score = np.sqrt(np.mean((y_cv_val - y_pred) ** 2))
                     logger.info(f"  Fold {fold} RMSE: {score:.4f}")
 
                 cv_scores.append(score)
@@ -341,26 +489,45 @@ class XGBoostMLflowTrainingPipeline:
             mlflow.log_metric("cv_mean", cv_mean)
             mlflow.log_metric("cv_std", cv_std)
 
-            # Train final model
-            logger.info("Training final model on full dataset...")
-            model.fit(X, y, verbose=False)
+            # Train final model on train+val
+            logger.info("Training final model on train+val...")
+            model.fit(X_train_val, y_train_val, verbose=False)
 
-            # Evaluate
-            metrics = self._evaluate_model(model, X, y)
-            metrics['cv_scores'] = cv_scores
-            metrics['cv_mean'] = float(cv_mean)
-            metrics['cv_std'] = float(cv_std)
+            # Evaluate on all splits
+            logger.info("\n" + "="*80)
+            logger.info("EVALUATION ON ALL SPLITS")
+            logger.info("="*80)
 
-            # Log metrics to MLflow
+            train_metrics = self._evaluate_model(model, X_train, y_train, prefix="train")
+            logger.info(f"Train: {self._format_metrics(train_metrics)}")
+
+            val_metrics = self._evaluate_model(model, X_val, y_val, prefix="val")
+            logger.info(f"Val:   {self._format_metrics(val_metrics)}")
+
+            test_metrics = self._evaluate_model(model, X_test, y_test, prefix="test")
+            logger.info(f"Test:  {self._format_metrics(test_metrics)}")
+
+            oot_metrics = self._evaluate_model(model, X_oot, y_oot, prefix="oot")
+            logger.info(f"OOT:   {self._format_metrics(oot_metrics)}")
+
+            # Aggregate all metrics
+            metrics = {
+                'cv_scores': cv_scores,
+                'cv_mean': float(cv_mean),
+                'cv_std': float(cv_std),
+                **train_metrics,
+                **val_metrics,
+                **test_metrics,
+                **oot_metrics
+            }
+
+            # Log all metrics to MLflow
             for key, value in metrics.items():
                 if isinstance(value, (int, float)):
                     mlflow.log_metric(key, value)
 
             # Log model to MLflow
-            if self.task == "classification":
-                mlflow.xgboost.log_model(model, "model")
-            else:
-                mlflow.xgboost.log_model(model, "model")
+            mlflow.xgboost.log_model(model, "model")
 
             # Log feature names
             mlflow.log_dict({"features": feature_names}, "features.json")
@@ -368,9 +535,25 @@ class XGBoostMLflowTrainingPipeline:
             # Save feature importance plot
             self._plot_feature_importance_mlflow(model, feature_names)
 
-            logger.info(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+            logger.info(f"\nMLflow run ID: {mlflow.active_run().info.run_id}")
+            logger.info("="*80 + "\n")
 
             return model, metrics
+
+    def _format_metrics(self, metrics: Dict) -> str:
+        """Format metrics for logging."""
+        if self.task == "classification":
+            acc = metrics.get('accuracy', metrics.get('train_accuracy', metrics.get('val_accuracy',
+                              metrics.get('test_accuracy', metrics.get('oot_accuracy', 0)))))
+            auc = metrics.get('auc', metrics.get('train_auc', metrics.get('val_auc',
+                              metrics.get('test_auc', metrics.get('oot_auc', 0)))))
+            return f"Accuracy={acc:.4f}, AUC={auc:.4f}"
+        else:
+            rmse = metrics.get('rmse', metrics.get('train_rmse', metrics.get('val_rmse',
+                               metrics.get('test_rmse', metrics.get('oot_rmse', 0)))))
+            mae = metrics.get('mae', metrics.get('train_mae', metrics.get('val_mae',
+                              metrics.get('test_mae', metrics.get('oot_mae', 0)))))
+            return f"RMSE={rmse:.4f}, MAE={mae:.4f}"
 
     def _tune_hyperparameters(self, X, y, tscv):
         """Perform hyperparameter tuning with GridSearchCV."""
@@ -413,18 +596,21 @@ class XGBoostMLflowTrainingPipeline:
 
         return grid_search.best_estimator_
 
-    def _evaluate_model(self, model: xgb.XGBModel, X: pd.DataFrame, y: pd.Series) -> Dict:
-        """Evaluate model and return metrics."""
+    def _evaluate_model(self, model: xgb.XGBModel, X: pd.DataFrame, y: pd.Series, prefix: str = "") -> Dict:
+        """Evaluate model and return metrics with optional prefix."""
         if self.task == "classification":
             y_pred = model.predict(X)
             y_pred_proba = model.predict_proba(X)[:, 1]
 
             metrics = {
-                'accuracy': float(accuracy_score(y, y_pred)),
-                'auc': float(roc_auc_score(y, y_pred_proba)),
-                'confusion_matrix': confusion_matrix(y, y_pred).tolist(),
-                'classification_report': classification_report(y, y_pred, output_dict=True)
+                f'{prefix}_accuracy' if prefix else 'accuracy': float(accuracy_score(y, y_pred)),
+                f'{prefix}_auc' if prefix else 'auc': float(roc_auc_score(y, y_pred_proba))
             }
+
+            # Only include detailed reports for test/oot (not train/val to save space)
+            if prefix in ['test', 'oot', '']:
+                metrics[f'{prefix}_confusion_matrix' if prefix else 'confusion_matrix'] = confusion_matrix(y, y_pred).tolist()
+                metrics[f'{prefix}_classification_report' if prefix else 'classification_report'] = classification_report(y, y_pred, output_dict=True)
         else:
             y_pred = model.predict(X)
             mse = np.mean((y - y_pred) ** 2)
@@ -432,10 +618,10 @@ class XGBoostMLflowTrainingPipeline:
             mae = np.mean(np.abs(y - y_pred))
 
             metrics = {
-                'mse': float(mse),
-                'rmse': float(rmse),
-                'mae': float(mae),
-                'r2': float(model.score(X, y))
+                f'{prefix}_mse' if prefix else 'mse': float(mse),
+                f'{prefix}_rmse' if prefix else 'rmse': float(rmse),
+                f'{prefix}_mae' if prefix else 'mae': float(mae),
+                f'{prefix}_r2' if prefix else 'r2': float(model.score(X, y))
             }
 
         return metrics
@@ -494,20 +680,20 @@ class XGBoostMLflowTrainingPipeline:
         logger.info(f"XGBoost Training Pipeline with MLflow - {self.prediction_horizon}min Prediction")
         logger.info("="*80 + "\n")
 
-        # Load data
+        # Load data (market features + gold labels)
         market_df, news_df = self.load_data()
 
-        # Create labels
-        market_df = self.create_labels(market_df)
+        # Validate labels are present
+        market_df = self.validate_labels(market_df)
 
         # Merge with news
         combined_df = self.merge_market_news(market_df, news_df)
 
         # Prepare features
-        X, y, feature_names = self.prepare_features(combined_df)
+        X, y, time_index, feature_names = self.prepare_features(combined_df)
 
-        # Train model
-        model, metrics = self.train_model(X, y, feature_names)
+        # Train model with proper splits
+        model, metrics = self.train_model(X, y, time_index, feature_names)
 
         # Save everything
         self.save_model_and_artifacts(model, feature_names, metrics)
@@ -518,15 +704,19 @@ class XGBoostMLflowTrainingPipeline:
         logger.info("="*80)
         logger.info(f"Task: {self.task}")
         logger.info(f"Prediction horizon: {self.prediction_horizon} minutes")
-        logger.info(f"Training samples: {len(X)}")
+        logger.info(f"Total samples: {len(X)}")
         logger.info(f"Features: {len(feature_names)}")
 
         if self.task == "classification":
-            logger.info(f"Accuracy: {metrics['accuracy']:.4f}")
-            logger.info(f"AUC: {metrics['auc']:.4f}")
+            logger.info(f"\nTest Set - Accuracy: {metrics.get('test_accuracy', 0):.4f}, "
+                       f"AUC: {metrics.get('test_auc', 0):.4f}")
+            logger.info(f"OOT Set  - Accuracy: {metrics.get('oot_accuracy', 0):.4f}, "
+                       f"AUC: {metrics.get('oot_auc', 0):.4f}")
         else:
-            logger.info(f"RMSE: {metrics['rmse']:.4f}")
-            logger.info(f"MAE: {metrics['mae']:.4f}")
+            logger.info(f"\nTest Set - RMSE: {metrics.get('test_rmse', 0):.4f}, "
+                       f"MAE: {metrics.get('test_mae', 0):.4f}")
+            logger.info(f"OOT Set  - RMSE: {metrics.get('oot_rmse', 0):.4f}, "
+                       f"MAE: {metrics.get('oot_mae', 0):.4f}")
 
         logger.info(f"\nModel saved to: {self.output_dir}")
         logger.info(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
@@ -541,6 +731,11 @@ def main():
         type=Path,
         required=True,
         help="Path to market features CSV (Gold layer)"
+    )
+    parser.add_argument(
+        "--labels",
+        type=Path,
+        help="Path to labels CSV (Gold layer). If not provided, will be inferred from market features path."
     )
     parser.add_argument(
         "--news-signals",
@@ -590,6 +785,7 @@ def main():
 
     pipeline = XGBoostMLflowTrainingPipeline(
         market_features_path=args.market_features,
+        labels_path=args.labels,
         news_signals_path=args.news_signals,
         prediction_horizon_minutes=args.prediction_horizon,
         output_dir=args.output_dir,
