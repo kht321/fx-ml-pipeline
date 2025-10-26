@@ -137,8 +137,10 @@ textblob==0.19.0
 threadpoolctl==3.6.0
 toml==0.10.2
 toolz==1.1.0
+torch==2.2.0
 tornado==6.5.2
 tqdm==4.67.1
+transformers==4.40.0
 typeguard==4.4.4
 typing-inspection==0.4.2
 typing_extensions==4.15.0

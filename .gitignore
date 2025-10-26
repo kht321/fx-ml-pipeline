@@ -1,4 +1,5 @@
 .env
+.env.example
 .venv*/
 __pycache__/
 *.pyc
@@ -9,6 +10,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Archive folder (old/deprecated code)
+archive/
 
 # Documentation (keep local only)
 docs/
@@ -35,6 +39,7 @@ data/news/silver/
 
 # New clean data structure (exclude large files)
 data_clean/bronze/market/*.ndjson
+data_clean/bronze/news/
 data_clean/silver/**/*.csv
 data_clean/gold/**/*.csv
 data_clean/gold/**/*.parquet
@@ -47,6 +52,9 @@ data_clean/
 outputs/
 *.csv
 *.pkl
+!data_clean_5year/models/*.pkl
+!data_clean_5year/models/*.csv
+!data_clean_5year/models/*.png
 *.joblib
 
 # OS files
@@ -63,3 +71,8 @@ airflow_logs/
 data_clean/*.zip
 *.zip
 *.db
+# Exclude 5-year test outputs except models
+data_clean_5year/bronze/
+data_clean_5year/silver/
+data_clean_5year/gold/
+data_clean_5year/training_outputs/
