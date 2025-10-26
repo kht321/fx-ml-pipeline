@@ -20,14 +20,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install Python dependencies with pinned versions
-RUN pip install --no-cache-dir --upgrade pip==25.0.0 setuptools==75.8.0 wheel==0.47.1 && \
+RUN pip install --no-cache-dir --upgrade pip==24.2 setuptools==75.1.0 wheel==0.44.0 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./src_clean/api /app/src_clean/api
 COPY ./src_clean/__init__.py /app/src_clean/
 COPY ./feature_repo /app/feature_repo
-COPY ./data_clean/models /app/data_clean/models
+
+# Create mount points for runtime model artifacts
+RUN mkdir -p /app/data_clean/models
 
 # Expose port
 EXPOSE 8000
