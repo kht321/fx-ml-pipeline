@@ -1,5 +1,0 @@
-pandas==2.2.2
-numpy==1.26.4
-requests==2.32.3
-great-expectations==0.18.14
-apache-airflow-providers-docker==4.4.3
