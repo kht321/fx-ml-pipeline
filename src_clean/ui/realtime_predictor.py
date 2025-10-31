@@ -381,10 +381,12 @@ class RealtimePredictor:
     def __init__(self,
                  model_dir: Path = Path("data_clean/models"),
                  news_dir: Path = Path("data/news/bronze/simulated"),
-                 predictions_file: Path = Path("data_clean/predictions/latest_prediction.json")):
+                 predictions_file: Path = Path("data_clean/predictions/latest_prediction.json"),
+                 history_file: Path = Path("data_clean/predictions/prediction_history.json")):
         self.model_dir = model_dir
         self.news_dir = news_dir
         self.predictions_file = predictions_file
+        self.history_file = history_file
         self.predictions_file.parent.mkdir(parents=True, exist_ok=True)
 
         self.model = None
@@ -543,10 +545,47 @@ class RealtimePredictor:
             with open(self.predictions_file, 'w') as f:
                 json.dump(result, f, indent=2)
 
+            # Save to history
+            self._save_to_history(result)
+
             logger.info(f"Prediction: {result['prediction']} (confidence: {result['confidence']:.2%})")
 
         except Exception as e:
             logger.error(f"Prediction error: {e}", exc_info=True)
+
+    def _save_to_history(self, prediction: Dict):
+        """Save prediction to history file."""
+        try:
+            # Load existing history
+            history = []
+            if self.history_file.exists():
+                with open(self.history_file, 'r') as f:
+                    history = json.load(f)
+
+            # Add new prediction (keep only essential fields)
+            history_entry = {
+                'timestamp': prediction['timestamp'],
+                'prediction': prediction['prediction'],
+                'confidence': prediction['confidence'],
+                'prob_up': prediction['probabilities']['UP'],
+                'prob_down': prediction['probabilities']['DOWN'],
+                'news_sentiment': prediction.get('news_sentiment', 0)
+            }
+
+            history.append(history_entry)
+
+            # Keep only last 100 predictions
+            if len(history) > 100:
+                history = history[-100:]
+
+            # Save updated history
+            with open(self.history_file, 'w') as f:
+                json.dump(history, f, indent=2)
+
+            logger.debug(f"Saved to history. Total predictions: {len(history)}")
+
+        except Exception as e:
+            logger.warning(f"Error saving to history: {e}")
 
     def start_watching(self):
         """Start watching news directory for events."""
