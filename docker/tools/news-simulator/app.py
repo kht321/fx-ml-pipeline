@@ -6,6 +6,7 @@ or neutral news articles to the Bronze pipeline.
 """
 
 import json
+import os
 import random
 import logging
 from datetime import datetime
@@ -28,7 +29,7 @@ CORS(app)
 
 # Configuration
 NEWS_DATA_DIR = Path("../data/news/bronze/raw_articles/")
-NEWS_OUTPUT_DIR = Path("../data/news/bronze/simulated/")
+NEWS_OUTPUT_DIR = Path(os.getenv("NEWS_OUTPUT_DIR", "../data/news/bronze/simulated/"))
 NEWS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory storage for loaded news
@@ -285,6 +286,6 @@ load_news_articles()
 if __name__ == '__main__':
     app.run(
         host='0.0.0.0',
-        port=5001,
+        port=5000,
         debug=True
     )

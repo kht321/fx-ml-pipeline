@@ -334,6 +334,26 @@ services:
       - model-green
 
   # ============================================================================
+  # NEWS SIMULATOR - Real-time News Streaming
+  # ============================================================================
+
+  news-simulator:
+    build:
+      context: ./docker/tools/news-simulator
+      dockerfile: Dockerfile
+    image: fx-ml-news-simulator:latest
+    container_name: ml-news-simulator
+    ports:
+      - "5050:5000"
+    volumes:
+      - ./data_clean/bronze/news:/app/data/news/bronze
+    networks:
+      - ml-network
+    environment:
+      - FLASK_ENV=production
+      - NEWS_OUTPUT_DIR=/app/data/news/bronze/simulated
+
+  # ============================================================================
   # TASK IMAGES (Pre-built for DockerOperator)
   # ============================================================================
 
