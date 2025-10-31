@@ -1,6 +1,7 @@
 project: fx_ml_pipeline
-registry: /feature_repo/data/registry.db
+registry: data/registry.db
 provider: local
 online_store:
-    path: /feature_repo/data/online_store.db
+    type: sqlite
+    path: data/online_store.db
 entity_key_serialization_version: 2

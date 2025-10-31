@@ -51,7 +51,9 @@ class ModelInference:
                 logger.warning(f"Model not found at {self.model_path}")
                 # Try alternative paths
                 alternative_paths = [
+                    Path("models/xgboost_classification_30min_20251101_042201.pkl"),
                     Path("models/xgboost_combined_model.pkl"),
+                    Path("models/xgboost_classification_enhanced.pkl"),
                     Path("models/random_forest_combined_model.pkl"),
                     Path("data/combined/models/gradient_boosting_combined_model.pkl"),
                 ]
@@ -64,13 +66,25 @@ class ModelInference:
 
             if self.model_path.exists():
                 model_bundle = load(self.model_path)
-                self.model = model_bundle.get('model')
-                self.scaler = model_bundle.get('scaler')
-                self.feature_names = model_bundle.get('feature_names', [])
-                self.model_type = model_bundle.get('model_type', 'unknown')
-                bundle_task = model_bundle.get('task_type') or model_bundle.get('prediction_task')
-                if not self.prediction_task:
-                    self.prediction_task = bundle_task or self._infer_task_from_model()
+
+                # Handle both dictionary bundles and raw model objects
+                if isinstance(model_bundle, dict):
+                    self.model = model_bundle.get('model')
+                    self.scaler = model_bundle.get('scaler')
+                    self.feature_names = model_bundle.get('feature_names', [])
+                    self.model_type = model_bundle.get('model_type', 'unknown')
+                    bundle_task = model_bundle.get('task_type') or model_bundle.get('prediction_task')
+                    if not self.prediction_task:
+                        self.prediction_task = bundle_task or self._infer_task_from_model()
+                else:
+                    # Raw model object (e.g., LGBMClassifier, XGBClassifier)
+                    self.model = model_bundle
+                    self.scaler = None
+                    self.feature_names = getattr(model_bundle, 'feature_names_in_', [])
+                    self.model_type = type(model_bundle).__name__
+                    if not self.prediction_task:
+                        self.prediction_task = self._infer_task_from_model()
+
                 self.is_loaded = True
                 logger.info(f"Loaded {self.model_type} model with {len(self.feature_names)} features")
             else:
@@ -112,15 +126,25 @@ class ModelInference:
         try:
             entity_rows = [{"instrument": instrument}]
 
-            # Fetch both market and news features
+            # Fetch both market and news features from our Feast feature views
             features_to_fetch = [
-                "market_gold_features:ret_1h",
-                "market_gold_features:ret_4h",
-                "market_gold_features:vol_1d",
-                "market_gold_features:rsi_14",
-                "market_gold_features:orderbook_imbalance",
-                "news_gold_signals:news_sentiment_score",
-                "news_gold_signals:news_signal_strength",
+                "market_features:close",
+                "market_features:rsi_14",
+                "market_features:macd",
+                "market_features:macd_signal",
+                "market_features:bb_upper",
+                "market_features:bb_middle",
+                "market_features:bb_lower",
+                "market_features:sma_7",
+                "market_features:sma_14",
+                "market_features:ema_7",
+                "market_features:ema_14",
+                "market_features:atr_14",
+                "market_features:adx_14",
+                "market_features:volatility_20",
+                "news_signals:avg_sentiment",
+                "news_signals:signal_strength",
+                "news_signals:article_count",
             ]
 
             online_features = self.feast_store.get_online_features(
@@ -237,15 +261,40 @@ class ModelInference:
         Returns:
             Mock prediction dictionary
         """
-        # Generate deterministic but varied mock predictions
-        hour = timestamp.hour
-        minute = timestamp.minute
+        # Try to read latest simulated news sentiment
+        simulated_news_dir = Path("data_clean/bronze/news/simulated")
+        avg_sentiment = 0.0
+        news_count = 0
 
-        # Use time to create pseudo-random but consistent predictions
-        seed = hour * 60 + minute
-        np.random.seed(seed)
+        if simulated_news_dir.exists():
+            import json
+            # Get the 5 most recent news files
+            news_files = sorted(simulated_news_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
 
-        probability = np.random.uniform(0.3, 0.8)
+            for news_file in news_files:
+                try:
+                    with open(news_file, 'r') as f:
+                        article = json.load(f)
+                        sentiment = article.get('sentiment_score', 0.0)
+                        avg_sentiment += sentiment
+                        news_count += 1
+                except:
+                    pass
+
+        # Calculate prediction based on news sentiment
+        if news_count > 0:
+            avg_sentiment = avg_sentiment / news_count
+            # Map sentiment [-1, 1] to probability [0.2, 0.8]
+            probability = 0.5 + (avg_sentiment * 0.3)  # Scale sentiment to probability
+            probability = max(0.2, min(0.8, probability))  # Clamp between 0.2 and 0.8
+        else:
+            # Fallback to time-based mock if no news
+            hour = timestamp.hour
+            minute = timestamp.minute
+            seed = hour * 60 + minute
+            np.random.seed(seed)
+            probability = np.random.uniform(0.3, 0.8)
+
         prediction = "bullish" if probability > 0.5 else "bearish"
         confidence = abs(probability - 0.5) * 2.0
         signal_strength = (probability - 0.5) * 2.0
@@ -259,7 +308,7 @@ class ModelInference:
             "confidence": confidence,
             "signal_strength": signal_strength,
             "features_used": len(self.feature_names or []),
-            "model_version": "mock",
+            "model_version": f"mock_with_news (n={news_count})",
             "predicted_relative_change": None,
             "predicted_price": None,
         }
