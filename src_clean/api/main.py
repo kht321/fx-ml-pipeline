@@ -44,9 +44,11 @@ app.add_middleware(
 
 # Initialize model inference engine
 try:
+    # Use regression model for price prediction (falls back to alternatives if not found)
     model = ModelInference(
-        model_path="models/gradient_boosting_combined_model.pkl",
-        feast_repo="feature_repo"
+        model_path="models/xgboost_regression_30min_20251026_030337.pkl",
+        feast_repo="feature_repo",
+        prediction_task="regression"  # Explicitly set to regression
     )
     logger.info("Model inference engine initialized")
 except Exception as e:

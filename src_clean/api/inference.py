@@ -149,12 +149,42 @@ class ModelInference:
                 "news_signals:avg_sentiment",
                 "news_signals:signal_strength",
                 "news_signals:article_count",
+                "news_signals:signal_time",  # Need this to compute news_age_minutes
             ]
 
             online_features = self.feast_store.get_online_features(
                 features=features_to_fetch,
                 entity_rows=entity_rows
             ).to_dict()
+
+            # Compute derived news features that training expects but Feast doesn't store
+            # news_age_minutes and news_available are computed in training's merge_market_news()
+            signal_time = online_features.get('news_signals:signal_time')
+            avg_sentiment = online_features.get('news_signals:avg_sentiment', 0.0)
+
+            # Extract values from lists if needed
+            if isinstance(signal_time, list) and len(signal_time) > 0:
+                signal_time = signal_time[0]
+            if isinstance(avg_sentiment, list) and len(avg_sentiment) > 0:
+                avg_sentiment = avg_sentiment[0]
+
+            if signal_time is not None and avg_sentiment not in [None, 0.0]:
+                # News is available, compute age
+                from datetime import timezone
+                if isinstance(signal_time, str):
+                    signal_time_dt = datetime.fromisoformat(signal_time.replace('Z', '+00:00'))
+                else:
+                    signal_time_dt = signal_time
+
+                current_time = datetime.now(timezone.utc)
+                age_minutes = (current_time - signal_time_dt).total_seconds() / 60
+
+                online_features['news_age_minutes'] = [age_minutes]
+                online_features['news_available'] = [1.0]
+            else:
+                # No valid news
+                online_features['news_age_minutes'] = [0.0]
+                online_features['news_available'] = [0.0]
 
             return online_features
 
@@ -308,12 +338,11 @@ class ModelInference:
             probability = 0.5 + (avg_sentiment * 0.3)  # Scale sentiment to probability
             probability = max(0.2, min(0.8, probability))  # Clamp between 0.2 and 0.8
         else:
-            # Fallback to time-based mock if no news
-            hour = timestamp.hour
-            minute = timestamp.minute
-            seed = hour * 60 + minute
-            np.random.seed(seed)
-            probability = np.random.uniform(0.3, 0.8)
+            # Fallback to stable mock if no news
+            # Use daily seed so prediction stays consistent throughout the day
+            date_seed = timestamp.year * 10000 + timestamp.month * 100 + timestamp.day
+            np.random.seed(date_seed)
+            probability = np.random.uniform(0.45, 0.75)  # More realistic range
 
         prediction = "bullish" if probability > 0.5 else "bearish"
         confidence = abs(probability - 0.5) * 2.0
