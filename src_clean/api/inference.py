@@ -49,8 +49,14 @@ class ModelInference:
 
             if not self.model_path.exists():
                 logger.warning(f"Model not found at {self.model_path}")
+<<<<<<< HEAD
                 # Try alternative paths - PRIORITIZE REGRESSION MODELS for price prediction
                 alternative_paths = [
+=======
+                # Try alternative paths - PRIORITIZE NEWEST REGRESSION MODEL trained with fixed features
+                alternative_paths = [
+                    Path("models/xgboost_regression_30min_20251101_153102.pkl"),  # NEW: Trained with 1-min resampling + fixed features
+>>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
                     Path("models/xgboost_regression_30min_20251026_030337.pkl"),
                     Path("models/lightgbm_regression_30min_20251026_030405.pkl"),
                     Path("models/xgboost_classification_30min_20251101_042201.pkl"),
@@ -156,6 +162,32 @@ class ModelInference:
                 entity_rows=entity_rows
             ).to_dict()
 
+<<<<<<< HEAD
+=======
+            # Compute derived news features that training expects but Feast doesn't store
+            # news_age_minutes and news_available are computed in training's merge_market_news()
+            # For inference, we use a simpler heuristic: if avg_sentiment is non-zero, news is available
+            avg_sentiment = online_features.get('news_signals:avg_sentiment', 0.0)
+            article_count = online_features.get('news_signals:article_count', 0)
+
+            # Extract values from lists if needed
+            if isinstance(avg_sentiment, list) and len(avg_sentiment) > 0:
+                avg_sentiment = avg_sentiment[0]
+            if isinstance(article_count, list) and len(article_count) > 0:
+                article_count = article_count[0]
+
+            # Simplified derived features for inference (without signal_time)
+            # Since we don't have signal_time in Feast, we use a proxy:
+            # - If article_count > 0, assume news is recent (age = 30 mins as median)
+            # - If article_count = 0, no news available
+            if article_count > 0:
+                online_features['news_age_minutes'] = [30.0]  # Assume median age
+                online_features['news_available'] = [1.0]
+            else:
+                online_features['news_age_minutes'] = [0.0]
+                online_features['news_available'] = [0.0]
+
+>>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
             return online_features
 
         except Exception as e:
@@ -308,12 +340,20 @@ class ModelInference:
             probability = 0.5 + (avg_sentiment * 0.3)  # Scale sentiment to probability
             probability = max(0.2, min(0.8, probability))  # Clamp between 0.2 and 0.8
         else:
+<<<<<<< HEAD
             # Fallback to time-based mock if no news
             hour = timestamp.hour
             minute = timestamp.minute
             seed = hour * 60 + minute
             np.random.seed(seed)
             probability = np.random.uniform(0.3, 0.8)
+=======
+            # Fallback to stable mock if no news
+            # Use daily seed so prediction stays consistent throughout the day
+            date_seed = timestamp.year * 10000 + timestamp.month * 100 + timestamp.day
+            np.random.seed(date_seed)
+            probability = np.random.uniform(0.45, 0.75)  # More realistic range
+>>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
 
         prediction = "bullish" if probability > 0.5 else "bearish"
         confidence = abs(probability - 0.5) * 2.0
