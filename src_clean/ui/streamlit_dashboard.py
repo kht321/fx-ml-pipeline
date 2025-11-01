@@ -109,9 +109,9 @@ def get_latest_price(account_id, instrument="SPX500_USD"):
 def get_candles(instrument="SPX500_USD", granularity="H1", count=100):
     """Get historical candles from OANDA."""
     if not OANDA_API:
-        # Generate mock candles
-        dates = pd.date_range(end=datetime.now(), periods=count, freq='H')
-        base_price = 4500
+        # Generate mock candles with realistic S&P 500 prices
+        dates = pd.date_range(end=datetime.now(), periods=count, freq='h')
+        base_price = 6500  # More realistic current S&P 500 level
         prices = base_price + np.cumsum(np.random.randn(count) * 10)
 
         return pd.DataFrame({
@@ -292,12 +292,19 @@ def generate_price_forecast(df, prediction_result, forecast_hours=4):
         current_price = df['close'].iloc[-1]
         recent_volatility = df['close'].pct_change().rolling(20).std().iloc[-1]
 
-        # Direction multiplier based on prediction
-        direction = 1 if prediction_result['prediction'] == 'UP' else -1
-        confidence = prediction_result['confidence']
-
-        # Expected move based on confidence and volatility
-        expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
+        # Check if we have a predicted price from regression model
+        if 'predicted_price' in prediction_result and prediction_result['predicted_price']:
+            # Use actual predicted price from regression model
+            target_price = prediction_result['predicted_price']
+            expected_move_pct = (target_price - current_price) / current_price
+        elif 'predicted_change' in prediction_result and prediction_result['predicted_change']:
+            # Use predicted change percentage
+            expected_move_pct = prediction_result['predicted_change'] / 100.0
+        else:
+            # Fallback to classification-based prediction
+            direction = 1 if prediction_result['prediction'].lower() in ['up', 'bullish'] else -1
+            confidence = prediction_result['confidence']
+            expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
 
         # Generate forecast points
         forecast_periods = 12  # 12 points for smooth line
