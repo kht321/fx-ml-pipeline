@@ -239,24 +239,28 @@ with TaskGroup("feature_engineering", tooltip="Process all feature types in para
 # STAGE 3: NEWS PROCESSING WITH FINBERT (OPTIMIZED MERGE)
 # ============================================================================
 
-process_news_finbert = DockerOperator(
-    task_id='process_news_finbert_optimized',
-    image=DOCKER_IMAGE,
-    api_version='auto',
-    auto_remove=True,
-    command=[
-        '-m', 'src_clean.data_pipelines.gold.news_signal_builder_optimized',
-        '--input', '/data_clean/bronze/news/',
-        '--output', '/data_clean/gold/news/signals/',
-        '--model', 'finbert',
-        '--window', '60',
-        '--batch-size', '32'
-    ],
-    mounts=MOUNTS,
-    network_mode=NETWORK_MODE,
-    mount_tmp_dir=False,
-    dag=dag,
-)
+# NOTE: FinBERT processing requires silver sentiment layer first
+# The optimized version (news_signal_builder_optimized.py) does not exist yet
+# TODO: Either create optimized version or add silver sentiment processing step
+# For now, this task is disabled to prevent pipeline failures
+
+# process_news_finbert = DockerOperator(
+#     task_id='process_news_finbert',
+#     image=DOCKER_IMAGE,
+#     api_version='auto',
+#     auto_remove=True,
+#     command=[
+#         '-m', 'src_clean.data_pipelines.gold.news_signal_builder',
+#         '--silver-sentiment', '/data_clean/silver/news/sentiment/spx500_sentiment.csv',
+#         '--bronze-news', '/data_clean/bronze/news/',
+#         '--output', '/data_clean/gold/news/signals/spx500_news_signals.csv',
+#         '--window', '60'
+#     ],
+#     mounts=MOUNTS,
+#     network_mode=NETWORK_MODE,
+#     mount_tmp_dir=False,
+#     dag=dag,
+# )
 
 # ============================================================================
 # STAGE 4: LABEL GENERATION (MULTIPLE HORIZONS)
@@ -437,14 +441,16 @@ print('Model deployed successfully!')
 # Stage 1 & 2: Data collection → Feature engineering
 data_collection >> feature_engineering
 
-# Stage 3: News processing (parallel with feature engineering)
-data_collection >> process_news_finbert
+# Stage 3: News processing - DISABLED (optimized version not implemented)
+# data_collection >> process_news_finbert
 
 # Stage 4: Label generation (needs enhanced features)
 feature_engineering >> label_generation
 
 # Stage 5: Model training (needs all preprocessing)
-[feature_engineering, label_generation, process_news_finbert] >> model_training
+# NOTE: Removed process_news_finbert dependency since task is disabled
+# Training will use market features only (news features optional)
+[feature_engineering, label_generation] >> model_training
 
 # Stage 6: Model selection and deployment
 model_training >> select_best_model >> deploy_best_model
