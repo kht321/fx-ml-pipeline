@@ -76,3 +76,6 @@ data_clean_5year/bronze/
 data_clean_5year/silver/
 data_clean_5year/gold/
 data_clean_5year/training_outputs/
+
+# macOS system files
+.DS_Store
