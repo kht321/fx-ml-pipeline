@@ -63,7 +63,6 @@ validate_bronze_data = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-c',
@@ -106,7 +105,6 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.silver.market_technical_processor',
@@ -116,7 +114,7 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='12g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -125,7 +123,6 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.silver.market_microstructure_processor',
@@ -135,7 +132,7 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='10g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -144,7 +141,6 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.silver.market_volatility_processor',
@@ -154,7 +150,7 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='10g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -163,7 +159,6 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.silver.news_sentiment_processor',
@@ -173,7 +168,7 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='8g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -188,7 +183,6 @@ with TaskGroup("gold_processing", tooltip="Silver→Gold aggregation + labels", 
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-    entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.gold.market_gold_builder',
@@ -200,7 +194,7 @@ with TaskGroup("gold_processing", tooltip="Silver→Gold aggregation + labels", 
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='6g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -209,19 +203,17 @@ with TaskGroup("gold_processing", tooltip="Silver→Gold aggregation + labels", 
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-        entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.gold.news_signal_builder',
-            '--silver-sentiment', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv',
-            '--bronze-news', '/data_clean/bronze/news/historical_5year/',
-            '--output', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+            '--input', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv',
+            '--output', '/data_clean/gold/news/signals/sp500_trading_signals.csv',
             '--window', '60'
         ],
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='8g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -230,7 +222,6 @@ with TaskGroup("gold_processing", tooltip="Silver→Gold aggregation + labels", 
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
-    entrypoint=[],
         docker_url=DOCKER_URL,
         command=[
             'python3', '-m', 'src_clean.data_pipelines.gold.label_generator',
@@ -242,7 +233,7 @@ with TaskGroup("gold_processing", tooltip="Silver→Gold aggregation + labels", 
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='6g',
+        mem_limit='3g',
         dag=dag,
     )
 
@@ -258,7 +249,6 @@ validate_gold_quality = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-c',
@@ -323,12 +313,11 @@ train_xgboost_model = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-m', 'src_clean.training.xgboost_training_pipeline_mlflow',
         '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-        '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+        '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.csv',
         '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
         '--prediction-horizon', '30',
         '--task', 'regression',
@@ -355,7 +344,6 @@ validate_model_output = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-c',
@@ -397,7 +385,6 @@ register_model_mlflow = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-c',
@@ -478,7 +465,6 @@ deploy_model = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-c',
@@ -551,7 +537,6 @@ generate_monitoring_report = DockerOperator(
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
-    entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
         'python3', '-c',
