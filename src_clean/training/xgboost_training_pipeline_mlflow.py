@@ -26,7 +26,7 @@ Repository Location: fx-ml-pipeline/src_clean/training/xgboost_training_pipeline
 import argparse
 import json
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple, Dict, Optional
 import sys
@@ -34,10 +34,10 @@ import sys
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
+from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import (
     classification_report, confusion_matrix, roc_auc_score,
-    accuracy_score, precision_recall_fscore_support, roc_curve
+    accuracy_score
 )
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -45,6 +45,59 @@ from joblib import dump
 import mlflow
 import mlflow.xgboost
 import mlflow.sklearn
+import optuna
+import shap
+
+
+def bin_cutting(shap_totals: pd.Series) -> Dict[str, list[str]]:
+    """Return cumulative percentile feature groups based on SHAP totals."""
+    shap_totals = shap_totals.sort_values(ascending=False)
+    total = shap_totals.sum()
+    if total <= 0:
+        logger.warning("SHAP totals sum to zero; percentile bins unavailable.")
+        return {}
+
+    cumprop = shap_totals.cumsum() / total
+    edges = np.array([0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.1])
+    labels = [f"{int(edges[i] * 100)}–{int(edges[i + 1] * 100)}%" for i in range(len(edges) - 1)]
+    bin_assignments = pd.cut(cumprop, bins=edges, labels=labels, include_lowest=True)
+
+    feature_bins = {
+        label: shap_totals[bin_assignments == label].index.tolist()
+        for label in bin_assignments.cat.categories
+        if (bin_assignments == label).any()
+    }
+
+    keys = list(feature_bins.keys())
+    for idx, key in enumerate(keys):
+        if idx == 0:
+            continue
+        feature_bins[key] = feature_bins[keys[idx - 1]] + feature_bins[key]
+
+    pop_groups = []
+    for idx, (key, features) in enumerate(feature_bins.items(), 1):
+        group_total = shap_totals[features].sum() / total if total else 0.0
+        if len(features) < 3:
+            pop_groups.append(key)
+            logger.debug(
+                "Dropping SHAP percentile bin %s (bin %d): %d features with %.4f share (<3 features).",
+                key,
+                idx,
+                len(features),
+                group_total,
+            )
+        else:
+            logger.info(
+                "Keeping SHAP percentile bin %s: %d features with %.4f cumulative share.",
+                key,
+                len(features),
+                group_total,
+            )
+
+    for key in pop_groups:
+        feature_bins.pop(key, None)
+
+    return feature_bins
 
 # Setup logging
 logging.basicConfig(
@@ -66,7 +119,9 @@ class XGBoostMLflowTrainingPipeline:
         output_dir: Path = Path("data_clean/models"),
         task: str = "classification",
         experiment_name: str = "sp500_prediction",
-        enable_tuning: bool = False
+        enable_tuning: bool = False,
+        stage1_n_trials: int=5,
+        stage2_n_trials: int=5
     ):
         """
         Initialize training pipeline with MLflow.
@@ -100,6 +155,9 @@ class XGBoostMLflowTrainingPipeline:
         self.enable_tuning = enable_tuning
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.hyperparameter_dir = self.output_dir / "hyperparameters" / self.experiment_name
+        self.stage1_n_trials = stage1_n_trials
+        self.stage2_n_trials = stage2_n_trials
 
         # Set up MLflow
         mlflow.set_experiment(experiment_name)
@@ -131,13 +189,13 @@ class XGBoostMLflowTrainingPipeline:
         }
 
         # Hyperparameter search space
-        self.param_grid = {
+        """        self.param_grid = {
             "max_depth": [4, 6, 8],
             "learning_rate": [0.01, 0.1, 0.3],
             "n_estimators": [100, 200, 300],
             "subsample": [0.8, 0.9],
             "colsample_bytree": [0.8, 0.9]
-        }
+        }"""
 
     def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Load market features, labels, and news signals from Gold layer."""
@@ -227,65 +285,68 @@ class XGBoostMLflowTrainingPipeline:
 
         return df
 
-    def merge_market_news(
-        self,
+    def merge_market_news(self,
         market_df: pd.DataFrame,
         news_df: Optional[pd.DataFrame],
         tolerance_hours: int = 6
     ) -> pd.DataFrame:
-        """Merge market features with news signals using as-of join."""
+        """Left-join market data with news signals, forward-filling missing news values."""
+        market_sorted = market_df.sort_values('time').reset_index(drop=True).copy()
+        market_sorted['time'] = pd.to_datetime(market_sorted['time'])
+
         if news_df is None or news_df.empty:
             logger.info("No news data - using market features only")
-            return market_df
+            market_sorted['news_rows_since_update'] = pd.NA
+            market_sorted['news_available'] = 0
+            market_sorted['news_age_minutes'] = np.nan
+            return market_sorted
 
-        logger.info("Merging market features with news signals...")
+        logger.info(f"Merging market features with news signals. Market Feature Initial Shape: {market_sorted.shape}")
 
-        merged_rows = []
-        tolerance = pd.Timedelta(hours=tolerance_hours)
+        news_sorted = news_df.sort_values('signal_time').reset_index(drop=True).copy()
+        news_sorted['signal_time'] = pd.to_datetime(news_sorted['signal_time'])
 
-        market_df = market_df.sort_values('time')
-        news_df = news_df.sort_values('signal_time')
+        news_value_cols = [col for col in news_sorted.columns if col != 'signal_time']
+        rename_map = {'signal_time': 'news_signal_time', **{col: f'news_{col}' for col in news_value_cols}}
+        news_prefixed = news_sorted.rename(columns=rename_map)
 
-        news_features = [
-            'signal_time', 'avg_sentiment', 'signal_strength',
-            'trading_signal', 'article_count', 'quality_score'
-        ]
-        available_news = [c for c in news_features if c in news_df.columns]
+        merge_kwargs = {
+            "left_on": "time",
+            "right_on": "news_signal_time",
+            "direction": "backward",
+        }
+        if tolerance_hours is not None:
+            merge_kwargs["tolerance"] = pd.Timedelta(hours=tolerance_hours)
 
-        for _, market_row in market_df.iterrows():
-            market_time = market_row['time']
-            news_cutoff = market_time - tolerance
-            eligible_news = news_df[
-                (news_df['signal_time'] <= market_time) &
-                (news_df['signal_time'] >= news_cutoff)
-            ]
+        combined_df = pd.merge_asof(market_sorted, news_prefixed, **merge_kwargs)
 
-            merged_row = market_row.to_dict()
+        news_time = combined_df['news_signal_time']
+        is_new_news = news_time.notna() & news_time.ne(news_time.shift())
+        event_id = is_new_news.cumsum()
+        rows_since = combined_df.groupby(event_id).cumcount().astype('Int64')
+        rows_since = rows_since.where(event_id > 0, pd.NA)
 
-            if not eligible_news.empty:
-                latest_news = eligible_news.iloc[-1]
-                for col in available_news:
-                    if col != 'signal_time':
-                        merged_row[f'news_{col}'] = latest_news[col]
-                news_age_minutes = (market_time - latest_news['signal_time']).total_seconds() / 60
-                merged_row['news_age_minutes'] = news_age_minutes
-                merged_row['news_available'] = 1
-            else:
-                for col in available_news:
-                    if col != 'signal_time':
-                        merged_row[f'news_{col}'] = 0.0
-                merged_row['news_age_minutes'] = np.nan
-                merged_row['news_available'] = 0
+        news_cols_to_ffill = [col for col in combined_df.columns if col.startswith('news_')]
+        if news_cols_to_ffill:
+            combined_df[news_cols_to_ffill] = combined_df[news_cols_to_ffill].ffill()
 
-            merged_rows.append(merged_row)
+        combined_df['news_rows_since_update'] = rows_since
+        combined_df['news_available'] = combined_df['news_signal_time'].notna().astype(int)
 
-        combined_df = pd.DataFrame(merged_rows)
+        if 'news_signal_time' in combined_df.columns:
+            combined_df['news_signal_time'] = pd.to_datetime(combined_df['news_signal_time'])
+            combined_df['news_age_minutes'] = (
+                combined_df['time'] - combined_df['news_signal_time']
+            ).dt.total_seconds() / 60
 
-        logger.info(f"Merged dataset: {len(combined_df)} observations")
+        logger.info(f"Merged dataset shape: {combined_df.shape}")
         news_coverage = combined_df['news_available'].mean()
-        logger.info(f"News coverage: {news_coverage:.1%}")
+        fresh_news = (combined_df['news_rows_since_update']==0).mean()
+        logger.info(f"News coverage: {news_coverage:.1%}. Fresh news fraction: {fresh_news:.1%}")
 
         return combined_df
+
+
 
     def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, pd.Index, list]:
         """Prepare features for training, preserving time index for splits."""
@@ -297,7 +358,7 @@ class XGBoostMLflowTrainingPipeline:
             'target', 'target_classification', 'target_regression',
             'target_pct_change', 'target_multiclass', 'future_close',
             'signal_time', 'collected_at', 'event_timestamp',
-            'prediction_horizon_minutes', 'label_generated_at', 'fold'
+            'prediction_horizon_minutes', 'label_generated_at', 'fold', 'news_signal_time'
         }
 
         feature_cols = [c for c in df.columns if c not in exclude_cols]
@@ -439,15 +500,20 @@ class XGBoostMLflowTrainingPipeline:
             mlflow.log_param("n_val_samples", len(X_val))
             mlflow.log_param("n_test_samples", len(X_test))
             mlflow.log_param("n_oot_samples", len(X_oot))
-            mlflow.log_param("n_features", len(feature_names))
+            mlflow.log_param("n_total_features", len(feature_names))
             mlflow.log_param("news_available", 'news_available' in X.columns)
 
             # Time series split for CV (only on train+val)
             tscv = TimeSeriesSplit(n_splits=5)
+            test_size = int(0.15 * X_train_val.shape[0])
+            tscv = TimeSeriesSplit(n_splits=3, test_size=test_size)
+
+            selected_feature_names = feature_names
 
             if self.enable_tuning:
                 logger.info("Performing hyperparameter tuning on train+val...")
                 model = self._tune_hyperparameters(X_train_val, y_train_val, tscv)
+                selected_feature_names = getattr(self, "selected_feature_names", feature_names)
             else:
                 # Use default parameters
                 if self.task == "classification":
@@ -457,15 +523,19 @@ class XGBoostMLflowTrainingPipeline:
 
                 # Log model parameters
                 mlflow.log_params(self.xgb_params[self.task])
+                self.selected_feature_names = feature_names
+                self.selected_feature_group = "all"
+                mlflow.log_param("selected_feature_group", "all")
+                mlflow.log_param("n_selected_features", len(selected_feature_names))
 
             # Cross-validation on train+val
             logger.info("Performing time series cross-validation on train+val...")
             cv_scores = []
 
             for fold, (train_idx, val_idx) in enumerate(tscv.split(X_train_val), 1):
-                X_cv_train = X_train_val.iloc[train_idx]
+                X_cv_train = X_train_val.iloc[train_idx][selected_feature_names]
                 y_cv_train = y_train_val.iloc[train_idx]
-                X_cv_val = X_train_val.iloc[val_idx]
+                X_cv_val = X_train_val.iloc[val_idx][selected_feature_names]
                 y_cv_val = y_train_val.iloc[val_idx]
 
                 model.fit(X_cv_train, y_cv_train, eval_set=[(X_cv_val, y_cv_val)], verbose=False)
@@ -491,23 +561,28 @@ class XGBoostMLflowTrainingPipeline:
 
             # Train final model on train+val
             logger.info("Training final model on train+val...")
-            model.fit(X_train_val, y_train_val, verbose=False)
+            model.fit(X_train_val[selected_feature_names], y_train_val, verbose=False)
 
             # Evaluate on all splits
             logger.info("\n" + "="*80)
             logger.info("EVALUATION ON ALL SPLITS")
             logger.info("="*80)
 
-            train_metrics = self._evaluate_model(model, X_train, y_train, prefix="train")
+            X_train_sel = X_train[selected_feature_names]
+            X_val_sel = X_val[selected_feature_names]
+            X_test_sel = X_test[selected_feature_names]
+            X_oot_sel = X_oot[selected_feature_names]
+
+            train_metrics = self._evaluate_model(model, X_train_sel, y_train, prefix="train")
             logger.info(f"Train: {self._format_metrics(train_metrics)}")
 
-            val_metrics = self._evaluate_model(model, X_val, y_val, prefix="val")
+            val_metrics = self._evaluate_model(model, X_val_sel, y_val, prefix="val")
             logger.info(f"Val:   {self._format_metrics(val_metrics)}")
 
-            test_metrics = self._evaluate_model(model, X_test, y_test, prefix="test")
+            test_metrics = self._evaluate_model(model, X_test_sel, y_test, prefix="test")
             logger.info(f"Test:  {self._format_metrics(test_metrics)}")
 
-            oot_metrics = self._evaluate_model(model, X_oot, y_oot, prefix="oot")
+            oot_metrics = self._evaluate_model(model, X_oot_sel, y_oot, prefix="oot")
             logger.info(f"OOT:   {self._format_metrics(oot_metrics)}")
 
             # Aggregate all metrics
@@ -520,6 +595,8 @@ class XGBoostMLflowTrainingPipeline:
                 **test_metrics,
                 **oot_metrics
             }
+            metrics['selected_features'] = selected_feature_names
+            metrics['selected_feature_group'] = getattr(self, "selected_feature_group", "all")
 
             # Log all metrics to MLflow
             for key, value in metrics.items():
@@ -530,14 +607,15 @@ class XGBoostMLflowTrainingPipeline:
             mlflow.xgboost.log_model(model, "model")
 
             # Log feature names
-            mlflow.log_dict({"features": feature_names}, "features.json")
+            mlflow.log_dict({"features": selected_feature_names}, "features.json")
 
             # Save feature importance plot
-            self._plot_feature_importance_mlflow(model, feature_names)
+            self._plot_feature_importance_mlflow(model, selected_feature_names)
 
             logger.info(f"\nMLflow run ID: {mlflow.active_run().info.run_id}")
             logger.info("="*80 + "\n")
 
+            self.selected_feature_names = selected_feature_names
             return model, metrics
 
     def _format_metrics(self, metrics: Dict) -> str:
@@ -556,45 +634,206 @@ class XGBoostMLflowTrainingPipeline:
             return f"RMSE={rmse:.4f}, MAE={mae:.4f}"
 
     def _tune_hyperparameters(self, X, y, tscv):
-        """Perform hyperparameter tuning with GridSearchCV."""
-        logger.info("Tuning hyperparameters...")
+        """Run two-stage Optuna hyperparameter tuning with SHAP-based feature selection."""
+        logger.info("Tuning hyperparameters (two-stage Optuna + SHAP)...")
 
-        if self.task == "classification":
-            base_model = xgb.XGBClassifier(
-                objective="binary:logistic",
-                eval_metric="auc",
-                random_state=42,
-                tree_method="hist"
-            )
-            scoring = 'roc_auc'
-        else:
-            base_model = xgb.XGBRegressor(
-                objective="reg:squarederror",
-                eval_metric="rmse",
-                random_state=42,
-                tree_method="hist"
-            )
-            scoring = 'neg_root_mean_squared_error'
+        X_df = X.copy()
+        y_series = y.copy()
 
-        grid_search = GridSearchCV(
-            base_model,
-            self.param_grid,
-            cv=tscv,
-            scoring=scoring,
-            n_jobs=-1,
-            verbose=1
+        stage1_trials = getattr(self, "stage1_n_trials", 5)
+        stage2_trials = getattr(self, "stage2_n_trials", 5)
+
+        # Ensure hyperparameter artifact directory exists
+        hyper_dir = getattr(self, "hyperparameter_dir", self.output_dir / "hyperparameters" / self.experiment_name)
+        hyper_dir.mkdir(parents=True, exist_ok=True)
+
+        ModelClass = xgb.XGBClassifier if self.task == "classification" else xgb.XGBRegressor
+        direction = "maximize" if self.task == "classification" else "minimize"
+        metric_name = "auc" if self.task == "classification" else "rmse"
+
+        base_params = self.xgb_params[self.task].copy()
+
+        # Build Optuna-compatible search space from legacy grid
+        #grid = self.param_grid
+
+        def _suggest_params(trial: optuna.Trial) -> Dict[str, float]:
+            params = {
+            # learning capacity / complexity
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+            "max_depth": trial.suggest_int("max_depth", 3, 10),
+            "gamma": trial.suggest_float("gamma", 0.0, 5.0),  # minimum split loss
+
+            # sampling / column subsampling (regularises interaction structure)
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+
+            # L1 / L2-style penalties
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-6, 20.0, log=True),
+            }
+            return params
+
+        def _cross_val_score(params: Dict[str, float], columns: list[str]) -> float:
+            scores = []
+            X_subset = X_df.loc[:, columns]
+            for train_idx, val_idx in tscv.split(X_subset, y_series):
+                model_params = base_params | params
+                model = ModelClass(**model_params)
+                X_train = X_subset.iloc[train_idx]
+                X_val = X_subset.iloc[val_idx]
+                y_train = y_series.iloc[train_idx]
+                y_val = y_series.iloc[val_idx]
+
+                model.fit(X_train, y_train, verbose=False)
+
+                if self.task == "classification":
+                    proba = model.predict_proba(X_val)[:, 1]
+                    score = roc_auc_score(y_val, proba)
+                else:
+                    preds = model.predict(X_val)
+                    score = np.sqrt(np.mean((y_val - preds) ** 2))
+                scores.append(float(score))
+
+            return float(np.mean(scores))
+
+        sampler = optuna.samplers.TPESampler(seed=42)
+
+        def _stage1_objective(trial: optuna.Trial) -> float:
+            params = _suggest_params(trial)
+            score = _cross_val_score(params, X_df.columns.tolist())
+            return score
+
+        stage1_name = f"{self.experiment_name}_stage1_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        stage1_study = optuna.create_study(direction=direction, sampler=sampler, study_name=stage1_name)
+        stage1_study.optimize(_stage1_objective, n_trials=stage1_trials, show_progress_bar=False)
+
+        stage1_best_params = stage1_study.best_trial.params
+        stage1_score = stage1_study.best_value
+        logger.info("Stage 1 complete: best %s=%.5f with params=%s", metric_name, stage1_score, stage1_best_params)
+        mlflow.log_dict(
+            stage1_best_params,
+            f"hyperparameters/{self.experiment_name}/stage1_best_params.json"
         )
 
-        grid_search.fit(X, y)
+        # Train best stage 1 model to compute SHAP importances
+        stage1_model_params = base_params | stage1_best_params
+        stage1_model = ModelClass(**stage1_model_params)
+        stage1_model.fit(X_df, y_series, verbose=False)
 
-        logger.info(f"Best parameters: {grid_search.best_params_}")
-        logger.info(f"Best score: {grid_search.best_score_:.4f}")
+        explainer = shap.TreeExplainer(stage1_model)
+        shap_values = explainer.shap_values(X_df)
+        if isinstance(shap_values, list):
+            shap_array = np.stack(shap_values, axis=0).mean(axis=0)
+        else:
+            shap_array = np.array(shap_values)
 
-        # Log best parameters
-        mlflow.log_params(grid_search.best_params_)
-        mlflow.log_metric("best_cv_score", grid_search.best_score_)
+        shap_abs = np.abs(shap_array)
+        shap_totals = pd.Series(shap_abs.sum(axis=0), index=X_df.columns).sort_values(ascending=False)
+        total_importance = shap_totals.sum()
+        cumprop = shap_totals.cumsum() / total_importance if total_importance else shap_totals.cumsum()
 
-        return grid_search.best_estimator_
+        feature_groups: Dict[str, list[str]] = bin_cutting(shap_totals)
+        if not feature_groups:
+            feature_groups = {}
+
+        straight_line = np.linspace(1 / len(shap_totals), 1.0, len(shap_totals))
+        deviation = cumprop.values - straight_line
+        knee_idx = int(np.argmax(deviation))
+        knee_features = shap_totals.index[:knee_idx + 1].tolist()
+        feature_groups["knee"] = knee_features or shap_totals.index[:1].tolist()
+
+        # Stage 2: include feature group selection
+        feature_group_keys = list(feature_groups.keys())
+
+        def _stage2_objective(trial: optuna.Trial) -> float:
+            params = _suggest_params(trial)
+            group = trial.suggest_categorical("feature_group", feature_group_keys + ["all"])
+            columns = X_df.columns.tolist() if group == "all" else feature_groups[group]
+            if not columns:
+                raise optuna.TrialPruned(f"Feature group '{group}' produced no columns.")
+            trial.set_user_attr("feature_group", group)
+            score = _cross_val_score(params, columns)
+            return score
+
+        stage2_name = f"{self.experiment_name}_stage2_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        stage2_study = optuna.create_study(direction=direction, sampler=sampler, study_name=stage2_name)
+        # Make sure Stage 1 solution is evaluated in Stage 2 with all features
+        stage2_study.enqueue_trial(stage1_best_params | {"feature_group": "all"})
+        stage2_study.optimize(_stage2_objective, n_trials=stage2_trials, show_progress_bar=False)
+
+        best_stage2_params = stage2_study.best_trial.params.copy()
+        best_group = best_stage2_params.pop("feature_group", "all")
+        selected_features = X_df.columns.tolist() if best_group == "all" else feature_groups.get(best_group, X_df.columns.tolist())
+        mlflow.log_dict(
+            {**best_stage2_params, "feature_group": best_group},
+            f"hyperparameters/{self.experiment_name}/stage2_best_params.json"
+        )
+
+        final_params = base_params | best_stage2_params
+        final_model = ModelClass(**final_params)
+
+        self.selected_feature_names = selected_features
+        self.selected_feature_group = best_group
+        self.stage1_study = stage1_study
+        self.stage2_study = stage2_study
+
+        # Persist artifacts
+        timestamp = datetime.now().isoformat()
+        shap_payload = {
+            "generated_at": timestamp,
+            "total_importance": float(total_importance),
+            "knee_index": knee_idx,
+            "knee_share": float(cumprop.iloc[knee_idx]) if len(cumprop) else 0.0,
+            "feature_groups": feature_groups,
+            "shap_totals": {col: float(val) for col, val in shap_totals.items()},
+        }
+        (hyper_dir / "shap_summary.json").write_text(json.dumps(shap_payload, indent=2), encoding="utf-8")
+
+        shap_fig_path = hyper_dir / "shap_feature_importance.png"
+        plt.figure(figsize=(12, 6))
+        sns.barplot(x=shap_totals.values[:20], y=shap_totals.index[:20], orient="h", color="steelblue")
+        plt.title("Top 20 SHAP Feature Importance")
+        plt.xlabel("Total |SHAP|")
+        plt.ylabel("Feature")
+        plt.tight_layout()
+        plt.savefig(shap_fig_path, dpi=180)
+        plt.close()
+
+        def _write_study_artifacts(study: optuna.Study, stage: str) -> None:
+            trials_df = study.trials_dataframe(attrs=("number", "value", "params", "state"))
+            trials_path = hyper_dir / f"{stage}_trials.csv"
+            trials_df.to_csv(trials_path, index=False)
+            summary = {
+                "generated_at": timestamp,
+                "stage": stage,
+                "direction": direction,
+                "best_value": float(study.best_value),
+                "best_params": study.best_trial.params,
+                "n_trials": len(study.trials),
+            }
+            (hyper_dir / f"{stage}_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+            mlflow.log_table(
+                trials_df,
+                artifact_file=f"hyperparameters/{self.experiment_name}/{stage}_trials.json"
+            )
+            mlflow.log_dict(
+                summary,
+                f"hyperparameters/{self.experiment_name}/{stage}_summary.json"
+            )
+
+        _write_study_artifacts(stage1_study, "stage1")
+        _write_study_artifacts(stage2_study, "stage2")
+
+        mlflow.log_metric("stage1_best_score", float(stage1_score))
+        mlflow.log_metric("stage2_best_score", float(stage2_study.best_value))
+        mlflow.log_params({k: v for k, v in final_params.items() if k not in {"objective", "eval_metric"}})
+        mlflow.log_param("selected_feature_group", best_group)
+        mlflow.log_param("n_selected_features", len(selected_features))
+
+        mlflow.log_artifacts(hyper_dir.as_posix(), artifact_path=f"hyperparameters/{self.experiment_name}")
+
+        self.tuned_params_stage2 = final_params
+        return final_model
 
     def _evaluate_model(self, model: xgb.XGBModel, X: pd.DataFrame, y: pd.Series, prefix: str = "") -> Dict:
         """Evaluate model and return metrics with optional prefix."""
@@ -694,9 +933,10 @@ class XGBoostMLflowTrainingPipeline:
 
         # Train model with proper splits
         model, metrics = self.train_model(X, y, time_index, feature_names)
+        selected_feature_names = metrics.get('selected_features', feature_names)
 
         # Save everything
-        self.save_model_and_artifacts(model, feature_names, metrics)
+        self.save_model_and_artifacts(model, selected_feature_names, metrics)
 
         # Print summary
         logger.info("\n" + "="*80)
@@ -705,7 +945,7 @@ class XGBoostMLflowTrainingPipeline:
         logger.info(f"Task: {self.task}")
         logger.info(f"Prediction horizon: {self.prediction_horizon} minutes")
         logger.info(f"Total samples: {len(X)}")
-        logger.info(f"Features: {len(feature_names)}")
+        logger.info(f"Features: {len(selected_feature_names)}")
 
         if self.task == "classification":
             logger.info(f"\nTest Set - Accuracy: {metrics.get('test_accuracy', 0):.4f}, "

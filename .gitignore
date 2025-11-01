@@ -76,3 +76,8 @@ data_clean_5year/bronze/
 data_clean_5year/silver/
 data_clean_5year/gold/
 data_clean_5year/training_outputs/
+notebooks/xgb_test/hyperparameters/sp500_prediction/shap_feature_importance.png
+notebooks/xgb_test/hyperparameters/sp500_prediction/shap_summary.json
+notebooks/xgb_test/hyperparameters/sp500_prediction/stage1_summary.json
+notebooks/xgb_test/hyperparameters/sp500_prediction/stage2_summary.json
+.gitignore
