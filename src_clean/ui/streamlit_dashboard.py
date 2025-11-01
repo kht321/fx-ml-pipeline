@@ -179,28 +179,70 @@ def calculate_technical_features(df):
 
 
 def load_latest_prediction():
-    """Load the latest prediction from event-driven predictor."""
+    """Load the latest prediction from FastAPI."""
     try:
-        if not PREDICTIONS_FILE.exists():
+        import requests
+        response = requests.post('http://localhost:8000/predict',
+                                json={'instrument': 'SPX500_USD'},
+                                timeout=5)
+
+        if response.status_code == 200:
+            pred_data = response.json()
+
+            # Convert to display format
+            task = pred_data.get('task', 'classification')
+
+            if task == 'regression':
+                # For regression model
+                return {
+                    'prediction': pred_data['prediction'],
+                    'confidence': pred_data['confidence'],
+                    'prob_up': 0.5 + (pred_data['signal_strength'] / 2.0),  # Convert to 0-1 range
+                    'prob_down': 0.5 - (pred_data['signal_strength'] / 2.0),
+                    'timestamp': pred_data['timestamp'],
+                    'trigger': 'api_call',
+                    'features_used': pred_data['features_used'],
+                    'news_article': None,
+                    'news_sentiment': pred_data['signal_strength'],
+                    'predicted_price': pred_data.get('predicted_price'),
+                    'predicted_change': pred_data.get('predicted_relative_change', 0) * 100  # Convert to %
+                }
+            else:
+                # For classification model
+                probability = pred_data.get('probability', 0.5)
+                return {
+                    'prediction': pred_data['prediction'],
+                    'confidence': pred_data['confidence'],
+                    'prob_up': probability,
+                    'prob_down': 1.0 - probability,
+                    'timestamp': pred_data['timestamp'],
+                    'trigger': 'api_call',
+                    'features_used': pred_data['features_used'],
+                    'news_article': None,
+                    'news_sentiment': pred_data['signal_strength']
+                }
+        else:
             return None
 
-        with open(PREDICTIONS_FILE, 'r') as f:
-            pred_data = json.load(f)
-
-        # Convert to display format
-        return {
-            'prediction': pred_data['prediction'],
-            'confidence': pred_data['confidence'],
-            'prob_up': pred_data['probabilities']['UP'],
-            'prob_down': pred_data['probabilities']['DOWN'],
-            'timestamp': pred_data['timestamp'],
-            'trigger': pred_data.get('trigger', 'unknown'),
-            'features_used': pred_data.get('features_calculated', 0),
-            'news_article': pred_data.get('news_article'),
-            'news_sentiment': pred_data.get('news_sentiment', 0)
-        }
     except Exception as e:
-        st.error(f"Error loading prediction: {e}")
+        # Fallback: try to load from file
+        try:
+            if PREDICTIONS_FILE.exists():
+                with open(PREDICTIONS_FILE, 'r') as f:
+                    pred_data = json.load(f)
+                return {
+                    'prediction': pred_data['prediction'],
+                    'confidence': pred_data['confidence'],
+                    'prob_up': pred_data['probabilities']['UP'],
+                    'prob_down': pred_data['probabilities']['DOWN'],
+                    'timestamp': pred_data['timestamp'],
+                    'trigger': pred_data.get('trigger', 'file'),
+                    'features_used': pred_data.get('features_calculated', 0),
+                    'news_article': pred_data.get('news_article'),
+                    'news_sentiment': pred_data.get('news_sentiment', 0)
+                }
+        except:
+            pass
         return None
 
 
@@ -585,7 +627,7 @@ def main():
     instrument = st.sidebar.text_input("Instrument", "SPX500_USD")
     granularity = st.sidebar.selectbox("Granularity", ["M15", "H1", "H4", "D"], index=1)
     candle_count = st.sidebar.slider("Candle Count", 50, 500, 100)
-    refresh_interval = st.sidebar.slider("Auto-refresh (seconds)", 30, 300, 60)
+    refresh_interval = st.sidebar.slider("Auto-refresh (seconds)", 5, 300, 5)
 
     # Load model
     st.sidebar.header("🤖 Model Status")
@@ -651,7 +693,7 @@ def main():
             if st.button("🔄 Refresh Now", use_container_width=True):
                 st.rerun()
         with col_auto:
-            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=False)
+            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=True)
 
         st.markdown("---")
 
@@ -912,7 +954,7 @@ def main():
     )
 
     # Auto-refresh
-    if st.sidebar.checkbox("🔄 Auto-refresh", value=False):
+    if st.sidebar.checkbox("🔄 Auto-refresh", value=True):
         time.sleep(refresh_interval)
         st.rerun()
 
