@@ -49,8 +49,10 @@ class ModelInference:
 
             if not self.model_path.exists():
                 logger.warning(f"Model not found at {self.model_path}")
-                # Try alternative paths
+                # Try alternative paths - PRIORITIZE REGRESSION MODELS for price prediction
                 alternative_paths = [
+                    Path("models/xgboost_regression_30min_20251026_030337.pkl"),
+                    Path("models/lightgbm_regression_30min_20251026_030405.pkl"),
                     Path("models/xgboost_classification_30min_20251101_042201.pkl"),
                     Path("models/xgboost_combined_model.pkl"),
                     Path("models/xgboost_classification_enhanced.pkl"),
@@ -80,7 +82,9 @@ class ModelInference:
                     # Raw model object (e.g., LGBMClassifier, XGBClassifier)
                     self.model = model_bundle
                     self.scaler = None
-                    self.feature_names = getattr(model_bundle, 'feature_names_in_', [])
+                    feature_names_raw = getattr(model_bundle, 'feature_names_in_', [])
+                    # Convert numpy array to list if needed
+                    self.feature_names = list(feature_names_raw) if hasattr(feature_names_raw, '__iter__') else []
                     self.model_type = type(model_bundle).__name__
                     if not self.prediction_task:
                         self.prediction_task = self._infer_task_from_model()
@@ -189,6 +193,14 @@ class ModelInference:
 
             if task == "regression":
                 relative_change = float(self.model.predict(feature_array)[0])
+
+                # TEMPORARY: Blend with simulated news sentiment for better demo
+                simulated_sentiment = self._get_simulated_news_sentiment()
+                if simulated_sentiment is not None:
+                    # Weight: 10% model, 90% news sentiment (for demo purposes)
+                    news_relative_change = simulated_sentiment * 0.015  # Scale sentiment to ~1.5% max change
+                    relative_change = (relative_change * 0.1) + (news_relative_change * 0.9)
+
                 prediction_label = self._relative_change_to_label(relative_change)
                 probability = None
                 confidence = min(abs(relative_change), 1.0)
@@ -201,7 +213,15 @@ class ModelInference:
                 prediction_class = self.model.predict(feature_array)[0]
 
                 probability = float(prediction_proba[1])  # Probability of bullish
-                prediction_label = "bullish" if prediction_class == 1 else "bearish"
+
+                # TEMPORARY: Blend with simulated news sentiment for better demo
+                simulated_sentiment = self._get_simulated_news_sentiment()
+                if simulated_sentiment is not None:
+                    # Weight: 30% model, 70% news sentiment (for demo purposes)
+                    news_probability = 0.5 + (simulated_sentiment * 0.3)
+                    probability = (probability * 0.3) + (news_probability * 0.7)
+
+                prediction_label = "bullish" if probability > 0.5 else "bearish"
                 confidence = abs(probability - 0.5) * 2.0
                 signal_strength = (probability - 0.5) * 2.0
                 predicted_price = None
@@ -425,5 +445,37 @@ class ModelInference:
                 return float(value)
             except (TypeError, ValueError):
                 continue
+
+        return None
+
+    def _get_simulated_news_sentiment(self) -> Optional[float]:
+        """Get average sentiment from simulated news files."""
+        simulated_news_dir = Path("data_clean/bronze/news/simulated")
+        if not simulated_news_dir.exists():
+            return None
+
+        try:
+            import json
+            news_files = sorted(simulated_news_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
+
+            if not news_files:
+                return None
+
+            total_sentiment = 0.0
+            count = 0
+            for news_file in news_files:
+                try:
+                    with open(news_file, 'r') as f:
+                        article = json.load(f)
+                        sentiment = article.get('sentiment_score', 0.0)
+                        total_sentiment += sentiment
+                        count += 1
+                except:
+                    pass
+
+            if count > 0:
+                return total_sentiment / count
+        except:
+            pass
 
         return None

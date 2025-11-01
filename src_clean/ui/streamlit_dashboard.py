@@ -109,9 +109,9 @@ def get_latest_price(account_id, instrument="SPX500_USD"):
 def get_candles(instrument="SPX500_USD", granularity="H1", count=100):
     """Get historical candles from OANDA."""
     if not OANDA_API:
-        # Generate mock candles
-        dates = pd.date_range(end=datetime.now(), periods=count, freq='H')
-        base_price = 4500
+        # Generate mock candles with realistic S&P 500 prices
+        dates = pd.date_range(end=datetime.now(), periods=count, freq='h')
+        base_price = 6500  # More realistic current S&P 500 level
         prices = base_price + np.cumsum(np.random.randn(count) * 10)
 
         return pd.DataFrame({
@@ -179,28 +179,70 @@ def calculate_technical_features(df):
 
 
 def load_latest_prediction():
-    """Load the latest prediction from event-driven predictor."""
+    """Load the latest prediction from FastAPI."""
     try:
-        if not PREDICTIONS_FILE.exists():
+        import requests
+        response = requests.post('http://localhost:8000/predict',
+                                json={'instrument': 'SPX500_USD'},
+                                timeout=5)
+
+        if response.status_code == 200:
+            pred_data = response.json()
+
+            # Convert to display format
+            task = pred_data.get('task', 'classification')
+
+            if task == 'regression':
+                # For regression model
+                return {
+                    'prediction': pred_data['prediction'],
+                    'confidence': pred_data['confidence'],
+                    'prob_up': 0.5 + (pred_data['signal_strength'] / 2.0),  # Convert to 0-1 range
+                    'prob_down': 0.5 - (pred_data['signal_strength'] / 2.0),
+                    'timestamp': pred_data['timestamp'],
+                    'trigger': 'api_call',
+                    'features_used': pred_data['features_used'],
+                    'news_article': None,
+                    'news_sentiment': pred_data['signal_strength'],
+                    'predicted_price': pred_data.get('predicted_price'),
+                    'predicted_change': pred_data.get('predicted_relative_change', 0) * 100  # Convert to %
+                }
+            else:
+                # For classification model
+                probability = pred_data.get('probability', 0.5)
+                return {
+                    'prediction': pred_data['prediction'],
+                    'confidence': pred_data['confidence'],
+                    'prob_up': probability,
+                    'prob_down': 1.0 - probability,
+                    'timestamp': pred_data['timestamp'],
+                    'trigger': 'api_call',
+                    'features_used': pred_data['features_used'],
+                    'news_article': None,
+                    'news_sentiment': pred_data['signal_strength']
+                }
+        else:
             return None
 
-        with open(PREDICTIONS_FILE, 'r') as f:
-            pred_data = json.load(f)
-
-        # Convert to display format
-        return {
-            'prediction': pred_data['prediction'],
-            'confidence': pred_data['confidence'],
-            'prob_up': pred_data['probabilities']['UP'],
-            'prob_down': pred_data['probabilities']['DOWN'],
-            'timestamp': pred_data['timestamp'],
-            'trigger': pred_data.get('trigger', 'unknown'),
-            'features_used': pred_data.get('features_calculated', 0),
-            'news_article': pred_data.get('news_article'),
-            'news_sentiment': pred_data.get('news_sentiment', 0)
-        }
     except Exception as e:
-        st.error(f"Error loading prediction: {e}")
+        # Fallback: try to load from file
+        try:
+            if PREDICTIONS_FILE.exists():
+                with open(PREDICTIONS_FILE, 'r') as f:
+                    pred_data = json.load(f)
+                return {
+                    'prediction': pred_data['prediction'],
+                    'confidence': pred_data['confidence'],
+                    'prob_up': pred_data['probabilities']['UP'],
+                    'prob_down': pred_data['probabilities']['DOWN'],
+                    'timestamp': pred_data['timestamp'],
+                    'trigger': pred_data.get('trigger', 'file'),
+                    'features_used': pred_data.get('features_calculated', 0),
+                    'news_article': pred_data.get('news_article'),
+                    'news_sentiment': pred_data.get('news_sentiment', 0)
+                }
+        except:
+            pass
         return None
 
 
@@ -250,12 +292,19 @@ def generate_price_forecast(df, prediction_result, forecast_hours=4):
         current_price = df['close'].iloc[-1]
         recent_volatility = df['close'].pct_change().rolling(20).std().iloc[-1]
 
-        # Direction multiplier based on prediction
-        direction = 1 if prediction_result['prediction'] == 'UP' else -1
-        confidence = prediction_result['confidence']
-
-        # Expected move based on confidence and volatility
-        expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
+        # Check if we have a predicted price from regression model
+        if 'predicted_price' in prediction_result and prediction_result['predicted_price']:
+            # Use actual predicted price from regression model
+            target_price = prediction_result['predicted_price']
+            expected_move_pct = (target_price - current_price) / current_price
+        elif 'predicted_change' in prediction_result and prediction_result['predicted_change']:
+            # Use predicted change percentage
+            expected_move_pct = prediction_result['predicted_change'] / 100.0
+        else:
+            # Fallback to classification-based prediction
+            direction = 1 if prediction_result['prediction'].lower() in ['up', 'bullish'] else -1
+            confidence = prediction_result['confidence']
+            expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
 
         # Generate forecast points
         forecast_periods = 12  # 12 points for smooth line
@@ -585,7 +634,7 @@ def main():
     instrument = st.sidebar.text_input("Instrument", "SPX500_USD")
     granularity = st.sidebar.selectbox("Granularity", ["M15", "H1", "H4", "D"], index=1)
     candle_count = st.sidebar.slider("Candle Count", 50, 500, 100)
-    refresh_interval = st.sidebar.slider("Auto-refresh (seconds)", 30, 300, 60)
+    refresh_interval = st.sidebar.slider("Auto-refresh (seconds)", 5, 300, 5)
 
     # Load model
     st.sidebar.header("🤖 Model Status")
@@ -651,7 +700,7 @@ def main():
             if st.button("🔄 Refresh Now", use_container_width=True):
                 st.rerun()
         with col_auto:
-            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=False)
+            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=True)
 
         st.markdown("---")
 
@@ -912,7 +961,7 @@ def main():
     )
 
     # Auto-refresh
-    if st.sidebar.checkbox("🔄 Auto-refresh", value=False):
+    if st.sidebar.checkbox("🔄 Auto-refresh", value=True):
         time.sleep(refresh_interval)
         st.rerun()
 
