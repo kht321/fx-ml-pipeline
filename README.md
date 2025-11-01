@@ -29,13 +29,11 @@ This project implements a complete MLOps pipeline for financial market predictio
 
 ### Prerequisites
 - Python 3.11+
-- Docker & Docker Compose (for full stack)
-- OANDA practice account ([Free signup](https://www.oanda.com/us-en/trading/api/))
-- **8GB RAM minimum** (16GB recommended for full Airflow orchestration)
-- 50GB free disk space
+- Docker & Docker Compose (optional, for full stack)
+- 8GB RAM minimum
 - macOS, Linux, or WSL2 on Windows
 
-### 5-Minute Local Demo
+### 2-Minute Demo (Regression Model + News Sentiment)
 
 ```bash
 # 1. Clone and setup
@@ -45,53 +43,32 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Configure OANDA credentials
-cat > .env << EOF
-OANDA_TOKEN=your_practice_token
-OANDA_ACCOUNT_ID=your_account_id
-OANDA_ENV=practice
-EOF
+# 2. Start all services (News Simulator + API + Dashboard)
+./start_all.sh
 
-# 3. Run pipeline (Bronze → Silver → Gold → Training)
-python src_clean/run_full_pipeline.py \
-  --bronze-market data_clean/bronze/market/spx500_usd_m1_5years.ndjson \
-  --bronze-news data_clean/bronze/news \
-  --output-dir data_clean \
-  --prediction-horizon 30
+# 3. Access the demo
+# - Streamlit Dashboard: http://localhost:8501
+# - News Simulator: http://localhost:5000
+# - FastAPI Docs: http://localhost:8000/docs
 
-# 4. View results
-mlflow ui --backend-store-uri file:./mlruns --port 5002
-# Open: http://localhost:5002
+# 4. Test the pipeline
+# Generate positive news → see bullish predictions
+# Generate negative news → see bearish predictions
 ```
 
-### Full Docker Stack
+**What you get:**
+- ✅ **Trained XGBoost Regression Model** (predicts price changes)
+- ✅ **Real-time News Sentiment** (influenc predictions)
+- ✅ **Interactive Dashboard** (live predictions + charts)
+- ✅ **REST API** (programmatic access)
+
+### Stop All Services
 
 ```bash
-# Start all services
-docker-compose up -d
-
-# Wait for services to initialize (30-60 seconds)
-docker-compose ps  # Check all services are "Up"
-
-# Services will be available at:
-# - Airflow:   http://localhost:8080 (admin/admin)
-# - MLflow:    http://localhost:5001
-# - FastAPI:   http://localhost:8000/docs
-# - Streamlit: http://localhost:8501
-# - Evidently: http://localhost:8050
-
-# For production pipeline with Airflow:
-# 1. Ensure bronze data exists: data_clean/bronze/market/spx500_usd_m1_historical.ndjson
-# 2. Trigger training DAG: sp500_pipeline_working in Airflow UI
-# 3. Monitor execution in Airflow logs and MLflow experiments
+./stop_all.sh
 ```
 
-**Important Notes:**
-- **MLflow runs on port 5001** (not 5000) to avoid conflicts with macOS ControlCenter
-- **Bronze data is required** - the DAG assumes preprocessed bronze data already exists
-- **Memory constraints**: On systems <16GB RAM, run data preprocessing locally, use Airflow only for training orchestration
-
-**See [DEMO.md](DEMO.md) for complete walkthrough.**
+**For complete step-by-step instructions, see [DEMO.md](DEMO.md)**
 
 ---
 
