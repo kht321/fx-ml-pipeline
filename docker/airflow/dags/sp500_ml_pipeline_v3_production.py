@@ -198,24 +198,20 @@ with TaskGroup("feature_engineering", tooltip="Process all feature types in para
 # STAGE 3: NEWS PROCESSING WITH FINBERT (OPTIMIZED MERGE)
 # ============================================================================
 
-# NOTE: FinBERT processing requires silver sentiment layer first
-# The optimized version (news_signal_builder_optimized.py) does not exist yet
-# TODO: Either create optimized version or add silver sentiment processing step
-# For now, this task is disabled to prevent pipeline failures
-
-# process_news_finbert = BashOperator(
-#     task_id='process_news_finbert',
-#     bash_command="""
-#     cd /app && \
-#     source .venv/bin/activate && \
-#     python -m src_clean.data_pipelines.gold.news_signal_builder \
-#         --silver-sentiment data_clean/silver/news/sentiment/spx500_sentiment.csv \
-#         --bronze-news data_clean/bronze/news/ \
-#         --output data_clean/gold/news/signals/spx500_news_signals.csv \
-#         --window 60
-#     """,
-#     dag=dag,
-# )
+process_news_finbert = BashOperator(
+    task_id='process_news_finbert_optimized',
+    bash_command="""
+    cd /app && \
+    source .venv/bin/activate && \
+    python src_clean/data_pipelines/gold/news_signal_builder_optimized.py \
+        --input data_clean/bronze/news/ \
+        --output data_clean/gold/news/signals/ \
+        --model finbert \
+        --window 60 \
+        --batch-size 32
+    """,
+    dag=dag,
+)
 
 # ============================================================================
 # STAGE 4: LABEL GENERATION (MULTIPLE HORIZONS)
@@ -524,16 +520,14 @@ data_collection >> validate_data
 # Stage 2: Feature engineering (after data validation)
 validate_data >> feature_engineering
 
-# Stage 3: News processing - DISABLED (optimized version not implemented)
-# validate_data >> process_news_finbert
+# Stage 3: News processing (parallel with feature engineering)
+validate_data >> process_news_finbert
 
 # Stage 4: Label generation (needs enhanced features)
 feature_engineering >> label_generation
 
 # Stage 5: Model training (needs all preprocessing)
-# NOTE: Removed process_news_finbert dependency since task is disabled
-# Training will use market features only (news features optional)
-[feature_engineering, label_generation] >> model_training
+[feature_engineering, label_generation, process_news_finbert] >> model_training
 
 # Stage 6: Model selection (after all training)
 model_training >> select_best_model
