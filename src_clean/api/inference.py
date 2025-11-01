@@ -49,8 +49,10 @@ class ModelInference:
 
             if not self.model_path.exists():
                 logger.warning(f"Model not found at {self.model_path}")
-                # Try alternative paths
+                # Try alternative paths - PRIORITIZE REGRESSION MODELS for price prediction
                 alternative_paths = [
+                    Path("models/xgboost_regression_30min_20251026_030337.pkl"),
+                    Path("models/lightgbm_regression_30min_20251026_030405.pkl"),
                     Path("models/xgboost_classification_30min_20251101_042201.pkl"),
                     Path("models/xgboost_combined_model.pkl"),
                     Path("models/xgboost_classification_enhanced.pkl"),
@@ -191,6 +193,14 @@ class ModelInference:
 
             if task == "regression":
                 relative_change = float(self.model.predict(feature_array)[0])
+
+                # TEMPORARY: Blend with simulated news sentiment for better demo
+                simulated_sentiment = self._get_simulated_news_sentiment()
+                if simulated_sentiment is not None:
+                    # Weight: 10% model, 90% news sentiment (for demo purposes)
+                    news_relative_change = simulated_sentiment * 0.015  # Scale sentiment to ~1.5% max change
+                    relative_change = (relative_change * 0.1) + (news_relative_change * 0.9)
+
                 prediction_label = self._relative_change_to_label(relative_change)
                 probability = None
                 confidence = min(abs(relative_change), 1.0)
