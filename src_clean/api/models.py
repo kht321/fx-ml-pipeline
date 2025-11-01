@@ -16,11 +16,14 @@ class PredictionResponse(BaseModel):
     instrument: str
     timestamp: datetime
     prediction: str  # "bullish", "bearish", "neutral"
-    probability: float  # 0.0 to 1.0
+    probability: Optional[float] = None  # 0.0 to 1.0 (None for regression)
     confidence: float  # 0.0 to 1.0
     signal_strength: float  # -1.0 to 1.0
     features_used: int
     model_version: str
+    task: Optional[str] = None  # "regression" or "classification"
+    predicted_relative_change: Optional[float] = None  # For regression
+    predicted_price: Optional[float] = None  # For regression
 
 
 class MarketDataPoint(BaseModel):
