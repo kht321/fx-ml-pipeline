@@ -44,7 +44,7 @@ class VolatilityProcessor:
         self.window = window
 
     def load_candles(self) -> pd.DataFrame:
-        """Load candles from bronze layer."""
+        """Load candles from bronze layer and forward-fill gaps at 1-minute granularity."""
         logger.info(f"Loading candles from {self.input_path}")
 
         candles = []
@@ -57,10 +57,55 @@ class VolatilityProcessor:
 
         df = pd.DataFrame(candles)
         df['time'] = pd.to_datetime(df['time'], utc=True)
-        df = df.sort_values('time').reset_index(drop=True)
+        df = df.sort_values('time')
 
-        logger.info(f"Loaded {len(df)} candles")
-        return df
+        if df.empty:
+            logger.warning("No candle data found.")
+            return df
+
+        df = df.set_index('time')
+        original_index = df.index
+        full_index = pd.date_range(
+            start=original_index.min(),
+            end=original_index.max(),
+            freq='1T',  # strict 1-minute cadence
+            tz=original_index.tz
+        )
+
+        df_full = df.reindex(full_index)
+        original_series = pd.Series(df_full.index.isin(original_index), index=df_full.index)
+
+        df_full = df_full.ffill()
+        logger.info("Reindex completed. Adding gap metadata.")
+
+        minutes_since_last = []
+        gap_count = 0
+        for original in original_series:
+            if original:
+                gap_count = 0
+            else:
+                gap_count += 1
+            minutes_since_last.append(gap_count)
+
+        df_full['minutes_since_last_data'] = pd.Series(minutes_since_last, index=df_full.index).astype('Int64')
+
+        is_original_int = original_series.astype(int)
+        df_full['is_backfilled'] = (1 - is_original_int).astype(int)
+
+        orig_shifted = is_original_int.shift(1, fill_value=0)
+        cumsum_orig = orig_shifted.cumsum()
+        count_prev_360 = cumsum_orig - cumsum_orig.shift(360, fill_value=0)
+        count_prev_60 = cumsum_orig - cumsum_orig.shift(60, fill_value=0)
+        count_prev_30 = cumsum_orig - cumsum_orig.shift(30, fill_value=0)
+        count_prev_30_60 = count_prev_60 - count_prev_30
+        count_prev_30_360 = count_prev_360 - count_prev_30
+        df_full['has_original_prev_30_to_60min'] = (count_prev_30_60 > 0).astype(int)
+        df_full['has_original_prev_30_to_360min'] = (count_prev_30_360 > 0).astype(int)
+
+        df_full = df_full.reset_index().rename(columns={'index': 'time'})
+
+        logger.info(f"Loaded {len(df_full)} candles after filling gaps (original: {len(df)}). Percentage of backfill: {(df_full['is_backfilled']==1).mean():.1%}. Percentage of orig 30-60min: {(df_full['has_original_prev_30_to_60min']==1).mean():.1%}. Percentage of 30-360min: {(df_full['has_original_prev_30_to_360min']==1).mean():.1%}")
+        return df_full
 
     def garman_klass(self, df: pd.DataFrame) -> pd.Series:
         """
