@@ -258,12 +258,14 @@ class TechnicalFeaturesProcessor:
             logger.warning(f"Insufficient data: {len(df)} < {self.min_periods}")
             return pd.DataFrame()
 
-        result = df[['time', 'instrument', 'open', 'high', 'low', 'close', 'volume']].copy()
+        result = df[['time', 'instrument', 'open', 'high', 'low', 'close', 'volume', 'is_backfilled','has_original_prev_30_to_60min', 'has_original_prev_30_to_360min']].copy()
 
         # Price returns
         result['return_1'] = df['close'].pct_change(1)
         result['return_5'] = df['close'].pct_change(5)
         result['return_10'] = df['close'].pct_change(10)
+        result['return_30'] = df['close'].pct_change(30)
+        result['return_60'] = df['close'].pct_change(60)
 
         # RSI
         result['rsi_14'] = self.compute_rsi(df['close'], period=14)
