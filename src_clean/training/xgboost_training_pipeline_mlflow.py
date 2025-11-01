@@ -143,11 +143,8 @@ class XGBoostMLflowTrainingPipeline:
         """Load market features, labels, and news signals from Gold layer."""
         logger.info("Loading data from Gold layer...")
 
-        # Load market features (support both CSV and Parquet)
-        if str(self.market_features_path).endswith('.parquet'):
-            market_df = pd.read_parquet(self.market_features_path)
-        else:
-            market_df = pd.read_csv(self.market_features_path)
+        # Load market features
+        market_df = pd.read_csv(self.market_features_path)
         market_df['time'] = pd.to_datetime(market_df['time'])
         logger.info(f"Loaded market features: {len(market_df)} rows, {len(market_df.columns)} columns")
 
@@ -199,13 +196,10 @@ class XGBoostMLflowTrainingPipeline:
             # For regression, use percentage change (stationary)
             merged_df['target'] = merged_df['target_pct_change']
 
-        # Load news signals if available (support both CSV and Parquet)
+        # Load news signals if available
         news_df = None
         if self.news_signals_path and self.news_signals_path.exists():
-            if str(self.news_signals_path).endswith('.parquet'):
-                news_df = pd.read_parquet(self.news_signals_path)
-            else:
-                news_df = pd.read_csv(self.news_signals_path)
+            news_df = pd.read_csv(self.news_signals_path)
             news_df['signal_time'] = pd.to_datetime(news_df['signal_time'])
             logger.info(f"Loaded news signals: {len(news_df)} rows, {len(news_df.columns)} columns")
         else:
@@ -532,15 +526,16 @@ class XGBoostMLflowTrainingPipeline:
                 if isinstance(value, (int, float)):
                     mlflow.log_metric(key, value)
 
-            # Log model to MLflow (wrapped in try-except to ensure local save happens)
-            try:
-                mlflow.xgboost.log_model(model, "model")
-                mlflow.log_dict({"features": feature_names}, "features.json")
-                self._plot_feature_importance_mlflow(model, feature_names)
-                logger.info(f"\nMLflow run ID: {mlflow.active_run().info.run_id}")
-            except Exception as e:
-                logger.warning(f"MLflow model logging failed (will save locally): {e}")
+            # Log model to MLflow
+            mlflow.xgboost.log_model(model, "model")
 
+            # Log feature names
+            mlflow.log_dict({"features": feature_names}, "features.json")
+
+            # Save feature importance plot
+            self._plot_feature_importance_mlflow(model, feature_names)
+
+            logger.info(f"\nMLflow run ID: {mlflow.active_run().info.run_id}")
             logger.info("="*80 + "\n")
 
             return model, metrics

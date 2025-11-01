@@ -45,11 +45,7 @@ MODEL_DIR = Path("data_clean/models")
 GOLD_DIR = Path("data_clean/gold")
 PREDICTIONS_FILE = Path("data_clean/predictions/latest_prediction.json")
 PREDICTIONS_HISTORY_FILE = Path("data_clean/predictions/prediction_history.json")
-<<<<<<< HEAD
 NEWS_DIR = Path("data/news/bronze/simulated")
-=======
-NEWS_DIR = Path("data_clean/bronze/news/simulated")
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
 
 # Initialize OANDA API if available
 if OANDA_AVAILABLE and OANDA_TOKEN:
@@ -69,10 +65,6 @@ def load_latest_model():
         # Find latest model
         model_files = list(MODEL_DIR.glob("xgboost_classification_*.pkl"))
         if not model_files:
-<<<<<<< HEAD
-=======
-            st.sidebar.warning("No model files found in data_clean/models/")
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
             return None, None, None
 
         latest_model_path = max(model_files, key=lambda p: p.stat().st_mtime)
@@ -83,54 +75,15 @@ def load_latest_model():
         features_path = MODEL_DIR / f"{model_name}_features.json"
         metrics_path = MODEL_DIR / f"{model_name}_metrics.json"
 
-<<<<<<< HEAD
         with open(features_path) as f:
             features = json.load(f)['features']
 
         with open(metrics_path) as f:
             metrics = json.load(f)
-=======
-        features = []
-        metrics = {}
-
-        # Try to load features file
-        if features_path.exists():
-            with open(features_path) as f:
-                feature_data = json.load(f)
-                features = feature_data.get('features', feature_data) if isinstance(feature_data, dict) else feature_data
-        else:
-            st.sidebar.warning(f"Features file not found: {features_path.name}")
-            # Fallback: try to get features from model
-            if hasattr(model, 'feature_names_in_'):
-                features = list(model.feature_names_in_)
-            elif hasattr(model, 'get_booster'):
-                features = model.get_booster().feature_names or []
-
-        # Try to load metrics file
-        if metrics_path.exists():
-            with open(metrics_path) as f:
-                metrics = json.load(f)
-        else:
-            st.sidebar.warning(f"Metrics file not found: {metrics_path.name}")
-            # Provide default metrics structure
-            metrics = {
-                'accuracy': 0.0,
-                'auc': 0.0,
-                'cv_mean': 0.0,
-                'cv_std': 0.0,
-                'confusion_matrix': [[0, 0], [0, 0]],
-                'classification_report': {}
-            }
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
 
         return model, features, metrics
     except Exception as e:
         st.error(f"Error loading model: {e}")
-<<<<<<< HEAD
-=======
-        import traceback
-        st.error(traceback.format_exc())
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
         return None, None, None
 
 
@@ -229,14 +182,7 @@ def load_latest_prediction():
     """Load the latest prediction from FastAPI."""
     try:
         import requests
-<<<<<<< HEAD
         response = requests.post('http://localhost:8000/predict',
-=======
-        import os
-        # Use Docker service name in container, localhost for local development
-        api_host = os.getenv('FASTAPI_HOST', 'fastapi')
-        response = requests.post(f'http://{api_host}:8000/predict',
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
                                 json={'instrument': 'SPX500_USD'},
                                 timeout=5)
 
@@ -754,11 +700,7 @@ def main():
             if st.button("🔄 Refresh Now", use_container_width=True):
                 st.rerun()
         with col_auto:
-<<<<<<< HEAD
             auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=True)
-=======
-            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=False)
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
 
         st.markdown("---")
 
@@ -939,11 +881,7 @@ def main():
                         st.write(f"**Time:** {article['file_time'].strftime('%H:%M:%S')}")
 
                     # Content snippet
-<<<<<<< HEAD
                     content = article.get('content', 'N/A')
-=======
-                    content = article.get('content') or article.get('body', 'N/A')
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
                     if content and content != 'N/A':
                         st.markdown("**Preview:**")
                         st.markdown(f"*{truncate_text(content, 300)}*")
@@ -1022,13 +960,8 @@ def main():
         unsafe_allow_html=True
     )
 
-<<<<<<< HEAD
     # Auto-refresh
     if st.sidebar.checkbox("🔄 Auto-refresh", value=True):
-=======
-    # Auto-refresh (disabled by default to avoid conflicts with tab-specific refresh)
-    if st.sidebar.checkbox("🔄 Auto-refresh All Tabs", value=False):
->>>>>>> bafbba1aa2bd44c36d3bb1f4378048e3ae1e9cc2
         time.sleep(refresh_interval)
         st.rerun()
 
