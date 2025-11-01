@@ -29,7 +29,8 @@ COPY ./src_clean/__init__.py /app/src_clean/
 COPY ./feature_repo /app/feature_repo
 
 # Create mount points for runtime model artifacts
-RUN mkdir -p /app/data_clean/models
+RUN mkdir -p /app/data_clean/models && \
+    ln -s /app/data_clean/models /app/models
 
 # Expose port
 EXPOSE 8000

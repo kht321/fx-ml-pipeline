@@ -2,12 +2,14 @@
 Enhanced Streamlit Dashboard for S&P500 ML Prediction Pipeline
 
 Features:
-- Real-time OANDA price data
+- Real-time OANDA price data with forecast projections
 - ML predictions with confidence scores
 - Feature importance visualization
 - Model metrics dashboard
-- News sentiment integration
-- Historical prediction performance
+- News sentiment integration with snippets
+- Historical prediction performance tracking
+- News sentiment timeline
+- Price forecast with confidence bands
 """
 
 import streamlit as st
@@ -22,6 +24,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import json
 from joblib import load
+import glob
 
 # Try to import OANDA (optional - fallback to mock data)
 try:
@@ -41,6 +44,8 @@ OANDA_ENV = os.getenv("OANDA_ENV", "practice")
 MODEL_DIR = Path("data_clean/models")
 GOLD_DIR = Path("data_clean/gold")
 PREDICTIONS_FILE = Path("data_clean/predictions/latest_prediction.json")
+PREDICTIONS_HISTORY_FILE = Path("data_clean/predictions/prediction_history.json")
+NEWS_DIR = Path("data/news/bronze/simulated")
 
 # Initialize OANDA API if available
 if OANDA_AVAILABLE and OANDA_TOKEN:
@@ -190,11 +195,109 @@ def load_latest_prediction():
             'prob_down': pred_data['probabilities']['DOWN'],
             'timestamp': pred_data['timestamp'],
             'trigger': pred_data.get('trigger', 'unknown'),
-            'features_used': pred_data.get('features_calculated', 0)
+            'features_used': pred_data.get('features_calculated', 0),
+            'news_article': pred_data.get('news_article'),
+            'news_sentiment': pred_data.get('news_sentiment', 0)
         }
     except Exception as e:
         st.error(f"Error loading prediction: {e}")
         return None
+
+
+def load_prediction_history(limit=20):
+    """Load prediction history."""
+    try:
+        if not PREDICTIONS_HISTORY_FILE.exists():
+            return []
+
+        with open(PREDICTIONS_HISTORY_FILE, 'r') as f:
+            history = json.load(f)
+
+        return history[-limit:] if len(history) > limit else history
+    except Exception as e:
+        st.warning(f"No prediction history available: {e}")
+        return []
+
+
+def load_recent_news(limit=10):
+    """Load recent news articles."""
+    try:
+        news_files = sorted(NEWS_DIR.glob("simulated_*.json"),
+                          key=lambda p: p.stat().st_mtime,
+                          reverse=True)[:limit]
+
+        news_list = []
+        for news_file in news_files:
+            try:
+                with open(news_file) as f:
+                    article = json.load(f)
+                    article['file_time'] = datetime.fromtimestamp(news_file.stat().st_mtime)
+                    news_list.append(article)
+            except Exception as e:
+                continue
+
+        return news_list
+    except Exception as e:
+        return []
+
+
+def generate_price_forecast(df, prediction_result, forecast_hours=4):
+    """Generate price forecast based on ML prediction and recent trend."""
+    try:
+        if df is None or df.empty or not prediction_result:
+            return None
+
+        current_price = df['close'].iloc[-1]
+        recent_volatility = df['close'].pct_change().rolling(20).std().iloc[-1]
+
+        # Direction multiplier based on prediction
+        direction = 1 if prediction_result['prediction'] == 'UP' else -1
+        confidence = prediction_result['confidence']
+
+        # Expected move based on confidence and volatility
+        expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
+
+        # Generate forecast points
+        forecast_periods = 12  # 12 points for smooth line
+        forecast_times = pd.date_range(
+            start=df['time'].iloc[-1],
+            periods=forecast_periods + 1,
+            freq='20min'
+        )[1:]
+
+        # Generate price path with some randomness
+        forecast_prices = []
+        upper_band = []
+        lower_band = []
+
+        for i in range(1, forecast_periods + 1):
+            progress = i / forecast_periods
+            # Base forecast with slight drift
+            base_move = current_price * (1 + expected_move_pct * progress)
+            forecast_prices.append(base_move)
+
+            # Confidence bands (wider as we go further)
+            band_width = current_price * recent_volatility * np.sqrt(progress) * 2
+            upper_band.append(base_move + band_width)
+            lower_band.append(base_move - band_width)
+
+        return {
+            'times': forecast_times,
+            'prices': forecast_prices,
+            'upper_band': upper_band,
+            'lower_band': lower_band,
+            'current_price': current_price
+        }
+    except Exception as e:
+        st.warning(f"Could not generate forecast: {e}")
+        return None
+
+
+def truncate_text(text, max_length=150):
+    """Truncate text to max_length and add ellipsis."""
+    if not text or len(text) <= max_length:
+        return text
+    return text[:max_length].rsplit(' ', 1)[0] + '...'
 
 
 def make_prediction(model, features, feature_names, latest_data):
@@ -223,13 +326,13 @@ def make_prediction(model, features, feature_names, latest_data):
         return None
 
 
-def plot_candlestick(df):
-    """Create candlestick chart with volume."""
+def plot_candlestick(df, forecast_data=None):
+    """Create candlestick chart with volume and optional forecast."""
     fig = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True,
         vertical_spacing=0.03,
-        subplot_titles=('S&P 500 Price', 'Volume'),
+        subplot_titles=('S&P 500 Price with Forecast', 'Volume'),
         row_heights=[0.7, 0.3]
     )
 
@@ -246,6 +349,50 @@ def plot_candlestick(df):
         row=1, col=1
     )
 
+    # Add forecast if provided
+    if forecast_data:
+        # Forecast line (dotted)
+        fig.add_trace(
+            go.Scatter(
+                x=forecast_data['times'],
+                y=forecast_data['prices'],
+                mode='lines',
+                name='Forecast',
+                line=dict(color='orange', width=2, dash='dot'),
+                showlegend=True
+            ),
+            row=1, col=1
+        )
+
+        # Upper confidence band
+        fig.add_trace(
+            go.Scatter(
+                x=forecast_data['times'],
+                y=forecast_data['upper_band'],
+                mode='lines',
+                name='Upper Bound',
+                line=dict(width=0),
+                showlegend=False,
+                hoverinfo='skip'
+            ),
+            row=1, col=1
+        )
+
+        # Lower confidence band (fill between)
+        fig.add_trace(
+            go.Scatter(
+                x=forecast_data['times'],
+                y=forecast_data['lower_band'],
+                mode='lines',
+                name='Confidence Band',
+                line=dict(width=0),
+                fillcolor='rgba(255, 165, 0, 0.2)',
+                fill='tonexty',
+                showlegend=True
+            ),
+            row=1, col=1
+        )
+
     # Volume
     colors = ['red' if df['close'].iloc[i] < df['open'].iloc[i] else 'green'
               for i in range(len(df))]
@@ -257,8 +404,8 @@ def plot_candlestick(df):
     fig.update_layout(
         height=600,
         xaxis_rangeslider_visible=False,
-        showlegend=False,
-        title_text="S&P 500 Market Data"
+        showlegend=True if forecast_data else False,
+        title_text="S&P 500 Market Data with ML Forecast"
     )
 
     return fig
@@ -295,6 +442,101 @@ def display_model_metrics(metrics):
         st.metric("CV Mean", f"{metrics.get('cv_mean', 0):.4f}")
     with col4:
         st.metric("CV Std", f"{metrics.get('cv_std', 0):.4f}")
+
+
+def plot_news_sentiment_timeline(news_list):
+    """Plot news sentiment over time."""
+    if not news_list:
+        return None
+
+    df = pd.DataFrame([
+        {
+            'time': article['file_time'],
+            'sentiment': article.get('sentiment_score', 0),
+            'headline': truncate_text(article.get('headline', 'N/A'), 50)
+        }
+        for article in news_list
+    ])
+
+    fig = go.Figure()
+
+    # Sentiment line
+    fig.add_trace(go.Scatter(
+        x=df['time'],
+        y=df['sentiment'],
+        mode='lines+markers',
+        name='Sentiment',
+        line=dict(color='blue', width=2),
+        marker=dict(size=8),
+        text=df['headline'],
+        hovertemplate='<b>%{text}</b><br>Sentiment: %{y:.2f}<br>%{x}<extra></extra>'
+    ))
+
+    # Zero line
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+
+    fig.update_layout(
+        title="News Sentiment Timeline",
+        xaxis_title="Time",
+        yaxis_title="Sentiment Score",
+        height=300,
+        hovermode='closest'
+    )
+
+    return fig
+
+
+def plot_prediction_history(history):
+    """Plot prediction history and accuracy."""
+    if not history:
+        return None
+
+    df = pd.DataFrame(history)
+    df['time'] = pd.to_datetime(df['timestamp'])
+    df['correct'] = df['prediction'] == df.get('actual', 'UNKNOWN')
+
+    fig = make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        subplot_titles=('Prediction Confidence Over Time', 'Prediction Outcomes'),
+        row_heights=[0.6, 0.4],
+        vertical_spacing=0.15
+    )
+
+    # Confidence over time
+    colors = ['green' if p == 'UP' else 'red' for p in df['prediction']]
+    fig.add_trace(
+        go.Scatter(
+            x=df['time'],
+            y=df['confidence'],
+            mode='lines+markers',
+            name='Confidence',
+            line=dict(width=2),
+            marker=dict(size=8, color=colors),
+            hovertemplate='<b>%{text}</b><br>Confidence: %{y:.1%}<extra></extra>',
+            text=df['prediction']
+        ),
+        row=1, col=1
+    )
+
+    # Prediction outcomes (if actual data available)
+    if 'actual' in df.columns:
+        outcome_counts = df.groupby(['prediction', 'correct']).size().reset_index(name='count')
+        fig.add_trace(
+            go.Bar(
+                x=outcome_counts['prediction'],
+                y=outcome_counts['count'],
+                name='Outcomes',
+                marker_color=['green' if c else 'red' for c in outcome_counts['correct']]
+            ),
+            row=2, col=1
+        )
+
+    fig.update_layout(height=500, showlegend=False)
+    fig.update_yaxes(title_text="Confidence", row=1, col=1)
+    fig.update_yaxes(title_text="Count", row=2, col=1)
+
+    return fig
 
 
 def display_prediction_gauge(pred_result):
@@ -358,10 +600,19 @@ def main():
         st.sidebar.info(f"Features: {len(feature_names)}")
 
     # Main content
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Live Trading", "🎯 Predictions", "📊 Model Performance", "🔍 Feature Analysis"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📈 Live Trading",
+        "🎯 Predictions",
+        "📰 News & Sentiment",
+        "📊 Model Performance",
+        "🔍 Feature Analysis"
+    ])
 
     with tab1:
         st.header(f"Live Market Data: {instrument}")
+
+        # Load prediction for forecast
+        pred_result = load_latest_prediction()
 
         # Current price
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -373,8 +624,18 @@ def main():
         # Fetch and display candles
         df = get_candles(instrument, granularity, candle_count)
         if df is not None and not df.empty:
-            # Plot
-            fig = plot_candlestick(df)
+            # Generate forecast if prediction available
+            forecast_data = None
+            if pred_result:
+                forecast_hours = st.slider("Forecast Horizon (hours)", 1, 12, 4, key='forecast_hours')
+                forecast_data = generate_price_forecast(df, pred_result, forecast_hours)
+
+                if forecast_data:
+                    st.info(f"🔮 **ML Forecast**: Price expected to move **{pred_result['prediction']}** "
+                           f"with **{pred_result['confidence']:.1%}** confidence over next {forecast_hours} hours")
+
+            # Plot with forecast
+            fig = plot_candlestick(df, forecast_data)
             st.plotly_chart(fig, use_container_width=True)
 
             # Recent data table
@@ -436,9 +697,8 @@ def main():
 
             st.markdown("---")
 
-            # Display news article that triggered prediction
+            # Display news snippet preview with sentiment
             if 'news_article' in pred_result and pred_result['news_article']:
-                st.subheader("📰 News Article That Triggered This Prediction")
                 news = pred_result['news_article']
 
                 # Sentiment badge
@@ -455,23 +715,43 @@ def main():
                     sentiment_color = "⚪"
                     sentiment_badge = f"⚪ Neutral ({sentiment_score:.2f})"
 
-                # Display news in a nice card
-                st.markdown(f"### {sentiment_color} {news.get('headline', 'N/A')}")
+                # News snippet card with preview
+                st.markdown("### 📰 News Trigger")
 
-                col_source, col_time = st.columns(2)
-                with col_source:
-                    st.markdown(f"**Source:** {news.get('source', 'N/A').replace('_', ' ').title()}")
-                with col_time:
-                    st.markdown(f"**Published:** {news.get('published_at', 'N/A')[:10]}")
+                with st.container():
+                    st.markdown(f"**{sentiment_color} {news.get('headline', 'N/A')}**")
 
-                st.markdown(f"**Sentiment:** {sentiment_badge}")
+                    col_meta1, col_meta2 = st.columns(2)
+                    with col_meta1:
+                        st.caption(f"Source: {news.get('source', 'N/A').replace('_', ' ').title()}")
+                    with col_meta2:
+                        st.caption(f"Published: {news.get('published_at', 'N/A')[:10]}")
 
-                # Show content in expander
-                if news.get('content') and news.get('content') != 'N/A':
-                    with st.expander("📖 Read Full Article"):
-                        st.markdown(news['content'])
+                    st.markdown(f"**Sentiment:** {sentiment_badge}")
+
+                    # Show snippet preview
+                    content = news.get('content', 'N/A')
+                    if content and content != 'N/A':
+                        snippet = truncate_text(content, 200)
+                        st.markdown(f"*{snippet}*")
+
+                        # Full article in expander
+                        with st.expander("📖 Read Full Article"):
+                            st.markdown(content)
+                    else:
+                        st.caption("No content available")
 
                 st.markdown("---")
+
+            # Prediction history
+            st.subheader("📊 Recent Prediction History")
+            history = load_prediction_history(limit=10)
+            if history:
+                history_fig = plot_prediction_history(history)
+                if history_fig:
+                    st.plotly_chart(history_fig, use_container_width=True)
+            else:
+                st.info("No prediction history available yet. Predictions will be tracked automatically.")
 
             # Event-driven status
             st.success("✅ **Event-Driven Mode Active**: Predictions automatically generated when new news arrives")
@@ -495,6 +775,94 @@ def main():
             st.rerun()
 
     with tab3:
+        st.header("📰 News & Sentiment Analysis")
+
+        # Load recent news
+        recent_news = load_recent_news(limit=20)
+
+        if recent_news:
+            # News sentiment timeline
+            st.subheader("📈 Sentiment Timeline")
+            sentiment_fig = plot_news_sentiment_timeline(recent_news)
+            if sentiment_fig:
+                st.plotly_chart(sentiment_fig, use_container_width=True)
+
+            st.markdown("---")
+
+            # Recent news articles
+            st.subheader("📄 Recent News Articles")
+
+            # Filter options
+            col_filter1, col_filter2 = st.columns(2)
+            with col_filter1:
+                sentiment_filter = st.selectbox(
+                    "Filter by Sentiment",
+                    ["All", "Positive", "Negative", "Neutral"]
+                )
+            with col_filter2:
+                num_articles = st.slider("Number of articles", 5, 20, 10)
+
+            # Apply filters
+            filtered_news = recent_news[:num_articles]
+            if sentiment_filter != "All":
+                filtered_news = [
+                    n for n in filtered_news
+                    if n.get('sentiment_type', '').lower() == sentiment_filter.lower()
+                ]
+
+            # Display articles as cards
+            for i, article in enumerate(filtered_news):
+                sentiment_type = article.get('sentiment_type', 'neutral')
+                sentiment_score = article.get('sentiment_score', 0)
+
+                if sentiment_type == 'positive':
+                    sentiment_emoji = "🟢"
+                elif sentiment_type == 'negative':
+                    sentiment_emoji = "🔴"
+                else:
+                    sentiment_emoji = "⚪"
+
+                with st.expander(f"{sentiment_emoji} {article.get('headline', 'N/A')}"):
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.write(f"**Source:** {article.get('source', 'N/A').replace('_', ' ').title()}")
+                        st.write(f"**Published:** {article.get('published_at', 'N/A')[:10]}")
+                    with col_b:
+                        st.write(f"**Sentiment:** {sentiment_type.title()} ({sentiment_score:.2f})")
+                        st.write(f"**Time:** {article['file_time'].strftime('%H:%M:%S')}")
+
+                    # Content snippet
+                    content = article.get('content', 'N/A')
+                    if content and content != 'N/A':
+                        st.markdown("**Preview:**")
+                        st.markdown(f"*{truncate_text(content, 300)}*")
+                    else:
+                        st.caption("No content available")
+
+            # Summary stats
+            st.markdown("---")
+            st.subheader("📊 News Summary")
+            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+
+            sentiments = [a.get('sentiment_score', 0) for a in recent_news]
+            avg_sentiment = np.mean(sentiments) if sentiments else 0
+            positive_count = sum(1 for a in recent_news if a.get('sentiment_type') == 'positive')
+            negative_count = sum(1 for a in recent_news if a.get('sentiment_type') == 'negative')
+            neutral_count = sum(1 for a in recent_news if a.get('sentiment_type') == 'neutral')
+
+            with col_s1:
+                st.metric("Avg Sentiment", f"{avg_sentiment:.2f}")
+            with col_s2:
+                st.metric("🟢 Positive", positive_count)
+            with col_s3:
+                st.metric("🔴 Negative", negative_count)
+            with col_s4:
+                st.metric("⚪ Neutral", neutral_count)
+
+        else:
+            st.info("No news articles available. Start the news simulator to generate articles.")
+
+    with tab4:
         st.header("📊 Model Performance Metrics")
 
         if metrics:
@@ -519,7 +887,7 @@ def main():
         else:
             st.warning("No metrics available")
 
-    with tab4:
+    with tab5:
         st.header("🔍 Feature Analysis")
 
         if model and feature_names:
