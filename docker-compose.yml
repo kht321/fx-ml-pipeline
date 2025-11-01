@@ -151,10 +151,10 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs=
       - AIRFLOW__WEBSERVER__SECRET_KEY=secret
-      - HOST_DATA_DIR=${HOST_DATA_DIR}
-      - HOST_MODELS_DIR=${HOST_MODELS_DIR}
+      # - HOST_DATA_DIR=${HOST_DATA_DIR}
+      # - HOST_MODELS_DIR=${HOST_MODELS_DIR}
     ports:
-      - "8080:8080"
+      - "8081:8080"
     volumes:
       - ./airflow_mlops/dags:/opt/airflow/dags
       - ./src_clean:/opt/airflow/src_clean
@@ -176,8 +176,8 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs=
-      - HOST_DATA_DIR=${HOST_DATA_DIR}
-      - HOST_MODELS_DIR=${HOST_MODELS_DIR}
+      # - HOST_DATA_DIR=${HOST_DATA_DIR}
+      # - HOST_MODELS_DIR=${HOST_MODELS_DIR}
     volumes:
       - ./airflow_mlops/dags:/opt/airflow/dags
       - ./src_clean:/opt/airflow/src_clean
@@ -198,6 +198,7 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__FERNET_KEY=81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs=
+      - AIRFLOW__SCHEDULER__STANDALONE_DAG_PROCESSOR=True
     volumes:
       - ./airflow_mlops/dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
