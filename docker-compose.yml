@@ -154,7 +154,7 @@ services:
       # - HOST_DATA_DIR=${HOST_DATA_DIR}
       # - HOST_MODELS_DIR=${HOST_MODELS_DIR}
     ports:
-      - "8081:8080"
+      - "8080:8080"
     volumes:
       - ./airflow_mlops/dags:/opt/airflow/dags
       - ./src_clean:/opt/airflow/src_clean
