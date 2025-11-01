@@ -233,6 +233,11 @@ services:
       - REDIS_PORT=6379
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - FEAST_REDIS_HOST=redis
+      # Email alerting configuration
+      - SMTP_SERVER=smtp.gmail.com
+      - SMTP_PORT=587
+      - ALERT_EMAIL=linoux80@gmail.com
+      - ALERT_EMAIL_PASSWORD=oejy pweq gtqf kojq
     command: uvicorn src_clean.api.main:app --host 0.0.0.0 --port 8000 --reload
 
   # ============================================================================

@@ -1,0 +1,13 @@
+{
+  "sentiment_drift_threshold": 0.3,
+  "prediction_drift_threshold": 0.25,
+  "confidence_drop_threshold": 0.15,
+  "window_size": 10,
+  "cooldown_minutes": 15,
+  "email_alerts_enabled": true,
+  "alert_on": [
+    "sentiment_drift",
+    "prediction_drift",
+    "confidence_drop"
+  ]
+}
