@@ -19,6 +19,16 @@ from .models import (
 )
 from .inference import ModelInference
 
+# Import drift monitoring (optional - won't fail if not available)
+try:
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from monitoring.drift_detector import DriftDetector, monitor_and_alert
+    DRIFT_MONITORING_AVAILABLE = True
+except ImportError:
+    logger.warning("Drift monitoring not available")
+    DRIFT_MONITORING_AVAILABLE = False
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -302,6 +312,97 @@ async def model_info():
         "feast_available": model.feast_store is not None,
         "model_path": str(model.model_path)
     }
+
+
+@app.get("/monitoring/drift/check", tags=["Monitoring"])
+async def check_drift():
+    """Check for model and feature drift.
+
+    Returns:
+        Drift detection results and alerts
+    """
+    if not DRIFT_MONITORING_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Drift monitoring not available"
+        )
+
+    try:
+        # Load detector with explicit config path
+        from pathlib import Path
+        config_path = Path("/app/config/drift_thresholds.json")
+        detector = DriftDetector(config_path=config_path if config_path.exists() else None)
+        alerts = detector.check_all_drifts()
+
+        return {
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "alerts_count": len(alerts),
+            "alerts": alerts,
+            "drift_detected": len(alerts) > 0
+        }
+
+    except Exception as e:
+        logger.error(f"Drift check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/monitoring/drift/alert", tags=["Monitoring"])
+async def trigger_drift_alert(
+    email_to: List[str] = None,
+    dry_run: bool = True
+):
+    """Trigger drift detection and send email alerts if drift detected.
+
+    Args:
+        email_to: List of email addresses to send alerts to
+        dry_run: If True, don't send actual emails (just simulate)
+
+    Returns:
+        Alert results
+    """
+    if not DRIFT_MONITORING_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Drift monitoring not available"
+        )
+
+    try:
+        # Configure email (only if not dry run and emails provided)
+        import os
+        from pathlib import Path
+
+        email_config = None
+        if not dry_run and email_to:
+            email_config = {
+                "smtp_server": os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+                "smtp_port": int(os.getenv("SMTP_PORT", "587")),
+                "sender_email": os.getenv("ALERT_EMAIL"),
+                "sender_password": os.getenv("ALERT_EMAIL_PASSWORD"),
+                "recipient_emails": email_to
+            }
+
+        # Load config path
+        config_path = Path("/app/config/drift_thresholds.json")
+
+        alerts = monitor_and_alert(
+            email_config=email_config,
+            dry_run=dry_run or not email_config,
+            config_path=config_path if config_path.exists() else None
+        )
+
+        return {
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "dry_run": dry_run,
+            "alerts_triggered": len(alerts),
+            "alerts": alerts,
+            "emails_sent": len(alerts) if (not dry_run and email_config) else 0
+        }
+
+    except Exception as e:
+        logger.error(f"Drift alert error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

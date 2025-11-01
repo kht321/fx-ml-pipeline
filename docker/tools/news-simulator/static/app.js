@@ -218,6 +218,96 @@ async function reloadArticles() {
     }
 }
 
+/**
+ * Stream custom news from text input
+ */
+async function streamCustomNews() {
+    const textarea = document.getElementById('custom-news-text');
+    const customText = textarea.value.trim();
+    const button = event.target.closest('.btn-custom');
+
+    // Validate input
+    if (!customText) {
+        showNotification('⚠ Please enter some news text', 'error');
+        textarea.focus();
+        return;
+    }
+
+    if (customText.length < 10) {
+        showNotification('⚠ Text too short (minimum 10 characters)', 'error');
+        textarea.focus();
+        return;
+    }
+
+    // Disable button and show loading
+    button.disabled = true;
+    button.classList.add('loading');
+    setStatus('loading', 'Analyzing...');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/stream/custom`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text: customText
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            // Display success with sentiment analysis
+            displayLastArticle({
+                time: data.article.streamed_at,
+                headline: data.article.headline,
+                sentiment: data.article.sentiment_score,
+                type: data.analysis.sentiment_type
+            });
+
+            // Show success notification with sentiment
+            const sentimentEmoji = {
+                'positive': '🟢',
+                'negative': '🔴',
+                'neutral': '⚪'
+            }[data.analysis.sentiment_type];
+
+            showNotification(
+                `✓ ${sentimentEmoji} Custom article streamed (${data.analysis.sentiment_type}, score: ${data.analysis.sentiment_score.toFixed(2)})`,
+                'success'
+            );
+
+            // Clear textarea
+            textarea.value = '';
+
+            // Update stats
+            await updateStats();
+
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+
+    } catch (error) {
+        console.error('Error streaming custom news:', error);
+        showNotification(`✗ Error: ${error.message}`, 'error');
+        setStatus('error', 'Error');
+    } finally {
+        button.disabled = false;
+        button.classList.remove('loading');
+        setTimeout(() => setStatus('ready', 'Ready'), 2000);
+    }
+}
+
+/**
+ * Clear custom news input
+ */
+function clearCustomInput() {
+    const textarea = document.getElementById('custom-news-text');
+    textarea.value = '';
+    textarea.focus();
+}
+
 // Add CSS animations
 const style = document.createElement('style');
 style.textContent = `

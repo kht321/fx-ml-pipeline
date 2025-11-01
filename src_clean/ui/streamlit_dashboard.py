@@ -37,6 +37,13 @@ try:
 except ImportError:
     OANDA_AVAILABLE = False
 
+# Try to import TextBlob for sentiment analysis
+try:
+    from textblob import TextBlob
+    TEXTBLOB_AVAILABLE = True
+except ImportError:
+    TEXTBLOB_AVAILABLE = False
+
 # Configuration
 OANDA_ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
 OANDA_TOKEN = os.getenv("OANDA_TOKEN")
@@ -243,6 +250,56 @@ def load_latest_prediction():
                 }
         except:
             pass
+        return None
+
+
+def analyze_custom_news_sentiment(news_text: str) -> dict:
+    """Analyze sentiment of custom news text and return prediction impact."""
+    if not news_text or not news_text.strip():
+        return None
+
+    if not TEXTBLOB_AVAILABLE:
+        st.warning("TextBlob not available. Install with: pip install textblob")
+        return None
+
+    try:
+        # Analyze sentiment using TextBlob
+        blob = TextBlob(news_text)
+        polarity = blob.sentiment.polarity  # -1 to 1
+        subjectivity = blob.sentiment.subjectivity  # 0 to 1
+
+        # Map sentiment to trading signal
+        if polarity > 0.1:
+            sentiment_type = "positive"
+            prediction = "UP"
+            signal_strength = min(abs(polarity), 1.0)
+        elif polarity < -0.1:
+            sentiment_type = "negative"
+            prediction = "DOWN"
+            signal_strength = min(abs(polarity), 1.0)
+        else:
+            sentiment_type = "neutral"
+            prediction = "NEUTRAL"
+            signal_strength = 0.1
+
+        # Calculate confidence based on both polarity and subjectivity
+        # Higher subjectivity means less confident
+        confidence = signal_strength * (1 - subjectivity * 0.5)
+
+        return {
+            'news_text': news_text[:200] + '...' if len(news_text) > 200 else news_text,
+            'sentiment_type': sentiment_type,
+            'polarity': polarity,
+            'subjectivity': subjectivity,
+            'prediction': prediction,
+            'confidence': confidence,
+            'signal_strength': signal_strength,
+            'prob_up': 0.5 + (polarity * 0.5) if polarity > 0 else 0.5 * (1 + polarity),
+            'prob_down': 0.5 - (polarity * 0.5) if polarity > 0 else 0.5 * (1 - polarity),
+            'timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        st.error(f"Error analyzing sentiment: {e}")
         return None
 
 

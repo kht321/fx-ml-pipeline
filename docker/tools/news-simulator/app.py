@@ -266,6 +266,98 @@ def stream_news(sentiment_type: str):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/stream/custom', methods=['POST'])
+def stream_custom_news():
+    """Stream a custom news article with user-provided text.
+
+    Analyzes sentiment and creates article structure matching mock articles.
+
+    Returns:
+        JSON response with streamed article and sentiment analysis
+    """
+    try:
+        data = request.get_json()
+        custom_text = data.get('text', '').strip()
+
+        if not custom_text:
+            return jsonify({
+                'status': 'error',
+                'error': 'No text provided'
+            }), 400
+
+        if len(custom_text) < 10:
+            return jsonify({
+                'status': 'error',
+                'error': 'Text too short (minimum 10 characters)'
+            }), 400
+
+        # Calculate sentiment for custom text
+        sentiment_score = calculate_sentiment(custom_text)
+
+        # Determine sentiment type based on score
+        if sentiment_score > 0.1:
+            sentiment_type = 'positive'
+        elif sentiment_score < -0.1:
+            sentiment_type = 'negative'
+        else:
+            sentiment_type = 'neutral'
+
+        # Create article structure matching existing articles
+        article = {
+            'headline': custom_text[:200] if len(custom_text) <= 200 else custom_text[:197] + '...',
+            'body': custom_text,
+            'sentiment_score': round(sentiment_score, 3),
+            'sentiment_type': sentiment_type,
+            'source': 'CustomInput',
+            'published_at': datetime.now().isoformat(),
+            'streamed_at': datetime.now().isoformat(),
+            'url': f'custom://article-{datetime.now().strftime("%Y%m%d%H%M%S")}',
+            'custom': True
+        }
+
+        # Save to simulated stream (same directory as other streamed articles)
+        output_file = NEWS_OUTPUT_DIR / f"simulated_{datetime.now().strftime('%Y%m%d_%H%M%S')}_custom.json"
+
+        with open(output_file, 'w') as f:
+            json.dump(article, f, indent=2)
+
+        logger.info(f"Streamed custom article (sentiment: {sentiment_type}, score: {sentiment_score:.3f})")
+        logger.info(f"  Text: {custom_text[:100]}...")
+
+        # Update statistics
+        stats['streamed_count'] += 1
+        stats['last_article'] = {
+            'time': article['streamed_at'],
+            'headline': article['headline'],
+            'sentiment': sentiment_score,
+            'type': sentiment_type
+        }
+
+        return jsonify({
+            'status': 'success',
+            'article': {
+                'headline': article['headline'],
+                'published_at': article['published_at'],
+                'source': article['source'],
+                'sentiment_score': sentiment_score,
+                'sentiment_type': sentiment_type,
+                'streamed_at': article['streamed_at']
+            },
+            'analysis': {
+                'sentiment_type': sentiment_type,
+                'sentiment_score': sentiment_score
+            },
+            'output_file': str(output_file)
+        })
+
+    except Exception as e:
+        logger.error(f"Error streaming custom news: {e}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/reload', methods=['POST'])
 def reload_articles():
     """Reload articles from disk."""
