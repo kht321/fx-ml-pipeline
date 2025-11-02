@@ -155,4 +155,6 @@ websockets==15.0.1
 Werkzeug==3.1.1
 lightgbm==4.0.0
 xgboost==3.0.5
+optuna==4.1.0
+pmdarima==2.0.4
 zipp==3.23.0
