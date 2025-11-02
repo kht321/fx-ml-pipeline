@@ -26,9 +26,9 @@ DOCKER_URL = 'unix://var/run/docker.sock'
 # Volume mounts - shared between all tasks
 # NOTE: Change this to your working directory: /path/to/working_dir/
 MOUNTS = [
-    Mount(source='/Users/dracbook/devroot/python/cs611/fx-ml-pipeline/data_clean', target='/data_clean', type='bind'),
-    Mount(source='/Users/dracbook/devroot/python/cs611/fx-ml-pipeline/src_clean', target='/app/src_clean', type='bind'),
-    Mount(source='/Users/dracbook/devroot/python/cs611/fx-ml-pipeline/models', target='/data_clean/models', type='bind'),
+    Mount(source='/path/to/working_dir/fx-ml-pipeline/data_clean', target='/data_clean', type='bind'),
+    Mount(source='/path/to/working_dir/fx-ml-pipeline/src_clean', target='/app/src_clean', type='bind'),
+    Mount(source='/path/to/working_dir/fx-ml-pipeline/models', target='/data_clean/models', type='bind'),
 ]
 
 # Path is based on MOUNTS as we are using DockerOperator
