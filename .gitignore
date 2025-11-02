@@ -176,3 +176,6 @@ data_clean/Latest Gold/market/features/spx500_features.parquet
 data_clean/Latest Gold/market/labels/spx500_labels_30min.parquet
 data_clean/Latest Gold/market/labels/spx500_labels_60min.parquet
 data_clean/Latest Gold/market/labels/spx500_labels_120min.parquet
+notebooks/AR_test/sp500_prediction_20251102_233914/ar_ols_30min_20251102_235743_features.json
+notebooks/AR_test/sp500_prediction_20251102_233914/ar_ols_30min_20251102_235743_metrics.json
+notebooks/AR_test/sp500_prediction_20251102_233914/sp500_prediction/predictions_vs_actuals.png

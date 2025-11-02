@@ -451,11 +451,11 @@ class XGBoostMLflowTrainingPipeline:
             'train_idx': X_sorted.index[:train_end],
             'val_idx': X_sorted.index[train_end:val_end],
             'test_idx': X_sorted.index[val_end:test_end],
-            'oot_idx': X_sorted.index[test_end:],
+            'oot_idx': X_sorted.index[test_end:-10000],  # exclude 10000 data for OOT2
             'train_dates': (time_sorted.iloc[0], time_sorted.iloc[train_end-1]),
             'val_dates': (time_sorted.iloc[train_end], time_sorted.iloc[val_end-1]),
             'test_dates': (time_sorted.iloc[val_end], time_sorted.iloc[test_end-1]),
-            'oot_dates': (time_sorted.iloc[test_end], time_sorted.iloc[-1])
+            'oot_dates': (time_sorted.iloc[test_end], time_sorted.iloc[-10000-1])
         }
 
         # Log split information
@@ -943,6 +943,7 @@ class XGBoostMLflowTrainingPipeline:
         final_model = ModelClass(**final_params)
 
         self.selected_feature_names = selected_features
+        self.selected_features = selected_features
         self.selected_feature_group = best_group
         self.stage1_study = stage1_study
         self.stage2_study = stage2_study
