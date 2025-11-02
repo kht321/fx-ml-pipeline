@@ -47,11 +47,12 @@ MODELS_BANK = f"{DATAMART}/models"
 # Raw data
 # NOTE To save processing time, switch to smaller data set instead of 5 years file (significant slower)
 NEWS_DATA_ZIP = "historical_5year.zip"
-# NEWS_DATA_DIR = f'{BRONZE_NEWS}/historical_5year/' # <-- change here
-NEWS_DATA_DIR = f'{BRONZE_NEWS}/' # <-- change here
-# MARKET_DATA_FILE= "spx500_usd_m1_5years.ndjson" # <-- change here
-MARKET_DATA_FILE= "spx500_usd_m1_2years.ndjson" # <-- change here
+NEWS_DATA_DIR = f'{BRONZE_NEWS}/historical_5year/' # <-- change here
+# NEWS_DATA_DIR = f'{BRONZE_NEWS}/' # <-- change here
+MARKET_DATA_FILE= "spx500_usd_m1_5years.ndjson" # <-- change here
+# MARKET_DATA_FILE= "spx500_usd_m1_2years.ndjson" # <-- change here
 MARKET_DATA_ZIP = f"{MARKET_DATA_FILE}.zip"  # 
+SKIP_NEWS_SIGNAL_BUILDING = "skip" # Set to "non_skip" if you want to train from fresh; For True to work,  GOLD_NEWS/signals/spx500_trading_signals.parquet must be presented 
 
 default_args = {
     'owner': 'ml-team',
@@ -76,8 +77,8 @@ with DAG(
     tags=['production', 'ml', 'sp500', 'end-to-end'],
 ) as dag:
 
-    start = DockerOperator(
-        task_id='start',
+    news_data = DockerOperator(
+        task_id='news_data',
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
@@ -86,7 +87,7 @@ with DAG(
         command=[
             'python3', '-c',
             """
-print('=== Start SP500 End to End ML Pipeline ===')
+print('=== News Data Arrival ===')
             """
         ],
         mounts=MOUNTS,
@@ -95,6 +96,24 @@ print('=== Start SP500 End to End ML Pipeline ===')
         dag=dag,
     )
 
+    market_data = DockerOperator(
+            task_id='market_data',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-c',
+                """
+print('=== Markket Data Arrival ===')
+                """
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            mount_tmp_dir=False,
+            dag=dag,
+        )
     # ========================================================================
     # Stage 1: Medallion Dual Data Pipeline
     # ========================================================================
@@ -178,7 +197,7 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     command=[
                         'python3', '-m', 'src_clean.data_pipelines.silver.market_technical_processor',
                         '--input', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
-                        '--output', '/data_clean/silver/market/technical/spx500_technical.csv'
+                        '--output', f"{SILVER_MARKET}/data_clean/silver/market/technical/spx500_technical.csv"
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -197,7 +216,7 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     command=[
                         'python3', '-m', 'src_clean.data_pipelines.silver.market_microstructure_processor',
                         '--input', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
-                        '--output', '/data_clean/silver/market/microstructure/spx500_microstructure.csv'
+                        '--output', f"{SILVER_MARKET}/microstructure/spx500_microstructure.csv"
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -216,7 +235,7 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     command=[
                         'python3', '-m', 'src_clean.data_pipelines.silver.market_volatility_processor',
                         '--input', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
-                        '--output', '/data_clean/silver/market/volatility/spx500_volatility.csv'
+                        '--output', f"{SILVER_MARKET}/volatility/spx500_volatility.csv"
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -243,7 +262,7 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     command=[
                         'python3', '-m', 'src_clean.data_pipelines.silver.news_sentiment_processor',
                         '--input-dir', NEWS_DATA_DIR,
-                        '--output', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv'
+                        '--output', f"{SILVER_NEWS}/sentiment/sp500_news_sentiment.csv"
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -270,10 +289,10 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     docker_url=DOCKER_URL,
                     command=[
                         'python3', '-m', 'src_clean.data_pipelines.gold.market_gold_builder',
-                        '--technical', '/data_clean/silver/market/technical/spx500_technical.csv',
-                        '--microstructure', '/data_clean/silver/market/microstructure/spx500_microstructure.csv',
-                        '--volatility', '/data_clean/silver/market/volatility/spx500_volatility.csv',
-                        '--output', '/data_clean/gold/market/features/spx500_features.csv'
+                        '--technical', f"{SILVER_MARKET}/technical/spx500_technical.csv",
+                        '--microstructure', f"{SILVER_MARKET}/microstructure/spx500_microstructure.csv",
+                        '--volatility', f"{SILVER_MARKET}/volatility/spx500_volatility.csv",
+                        '--output', f"{GOLD_MARKET}/features/spx500_features.csv"
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -291,10 +310,11 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     docker_url=DOCKER_URL,
                     command=[
                         'python3', '-m', 'src_clean.data_pipelines.gold.news_signal_builder',
-                        '--silver-sentiment', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv',
+                        '--silver-sentiment', f"{SILVER_NEWS}/sentiment/sp500_news_sentiment.csv",
                         '--bronze-news', NEWS_DATA_DIR,
-                        '--output', '/data_clean/gold/news/signals/spx500_trading_signals.parquet',
-                        '--window', '60'
+                        '--output', f"{GOLD_NEWS}/signals/spx500_trading_signals.parquet",
+                        '--window', '60',
+                        '--skip-training', SKIP_NEWS_SIGNAL_BUILDING,
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -345,7 +365,7 @@ print('=== Start SP500 End to End ML Pipeline ===')
                         'python3', '-m', 'src_clean.data_pipelines.gold.validate_gold_data_quality',
                         '--gold-market-features-file', f"{GOLD_MARKET}/features/spx500_features.csv",
                         '--gold-market-labels-file', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
-                        '--gold-news-signal-file', f"{GOLD_MARKET}/news/signals/sp500_trading_signals.csv",
+                        '--gold-news-signal-file', f"{GOLD_NEWS}/signals/sp500_trading_signals.csv",
                     ],                    
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -373,9 +393,9 @@ print('=== Start SP500 End to End ML Pipeline ===')
             docker_url=DOCKER_URL,
             command=[
                 'python3', '-m', 'src_clean.training.xgboost_training_pipeline_mlflow',
-                '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-                '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
-                '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                '--market-features', f"{GOLD_MARKET}/features/spx500_features.csv",
+                '--news-signals', f"{GOLD_NEWS}/signals/sp500_trading_signals.parquet",
+                '--labels', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
                 '--prediction-horizon', '30',
                 '--task', 'regression',
                 '--output-dir', f"{MODELS_BANK}/xgboost",
@@ -402,9 +422,9 @@ print('=== Start SP500 End to End ML Pipeline ===')
             docker_url=DOCKER_URL,
             command=[
                 'python3', '-m', 'src_clean.training.lightgbm_training_pipeline_mlflow',
-                '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-                '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
-                '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                '--market-features', f"{GOLD_MARKET}/features/spx500_features.csv",
+                '--news-signals', f"{GOLD_NEWS}/signals/sp500_trading_signals.parquet",
+                '--labels', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
                 '--prediction-horizon', '30',
                 '--task', 'regression',
                 '--output-dir', f"{MODELS_BANK}/lightgbm",
@@ -422,21 +442,49 @@ print('=== Start SP500 End to End ML Pipeline ===')
         )
 
         # Train ARIMAX Model
-        train_arima_model = DockerOperator(
-            task_id='train_arima_regression',
+        # train_arima_model = DockerOperator(
+        #     task_id='train_arima_regression',
+        #     image=DOCKER_IMAGE,
+        #     api_version='auto',
+        #     auto_remove=True,
+        #     entrypoint=[],
+        #     docker_url=DOCKER_URL,
+        #     command=[
+        #         'python3', '-m', 'src_clean.training.arima_training_pipeline_mlflow',
+        #         '--market-features', f"{GOLD_MARKET}/features/spx500_features.csv",
+        #         '--news-signals', f"{GOLD_NEWS}/signals/sp500_trading_signals.parquet",
+        #         '--labels', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
+        #         '--prediction-horizon', '30',
+        #         '--output-dir', f"{MODELS_BANK}/arima",
+        #         '--experiment-name', 'sp500_arimax_v4',
+        #         '--mlflow-uri', 'http://ml-mlflow:5000'
+        #     ],
+        #     mounts=MOUNTS,
+        #     network_mode=NETWORK_MODE,
+        #     environment={
+        #         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
+        #     },
+        #     mount_tmp_dir=False,
+        #     mem_limit='4g',
+        #     dag=dag,
+        # )
+
+        # Train Autoregressive OLS Model
+        train_ar_model = DockerOperator(
+            task_id='train_ar_regression',
             image=DOCKER_IMAGE,
             api_version='auto',
             auto_remove=True,
             entrypoint=[],
             docker_url=DOCKER_URL,
             command=[
-                'python3', '-m', 'src_clean.training.arima_training_pipeline_mlflow',
-                '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-                '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
-                '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                'python3', '-m', 'src_clean.training.ar_training_pipeline_mlflow',
+                '--market-features', f"{GOLD_MARKET}/features/spx500_features.csv",
+                '--news-signals', f"{GOLD_NEWS}/signals/sp500_trading_signals.parquet",
+                '--labels', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
                 '--prediction-horizon', '30',
-                '--output-dir', f"{MODELS_BANK}/arima",
-                '--experiment-name', 'sp500_arimax_v4',
+                '--output-dir', f"{MODELS_BANK}/ar",
+                '--experiment-name', 'sp500_ar_v4',
                 '--mlflow-uri', 'http://ml-mlflow:5000'
             ],
             mounts=MOUNTS,
@@ -449,7 +497,8 @@ print('=== Start SP500 End to End ML Pipeline ===')
             dag=dag,
         )
 
-        [train_xgboost_model, train_lightgbm_model, train_arima_model]
+        # [train_xgboost_model, train_lightgbm_model, train_arima_model]
+        [train_xgboost_model, train_lightgbm_model, train_ar_model]
 
     # ============================================================================
     # STAGE 3: Model Selection & Deployment
@@ -564,7 +613,8 @@ print('=== Start SP500 End to End ML Pipeline ===')
 # DAG DEPENDENCIES
 # ============================================================================
 
-start >> [ingest_market, ingest_news]
+news_data >> ingest_news
+market_data >> ingest_market
 bronze_data_lake >> silver_data_mart
 market_silver >> build_market_features
 news_silver >> build_news_signals
