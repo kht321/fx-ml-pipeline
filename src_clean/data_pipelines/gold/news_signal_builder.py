@@ -466,10 +466,20 @@ def main():
         default=60,
         help="Aggregation window in minutes (default: 60)"
     )
+    parser.add_argument(
+        "--skip-training",
+        required=False,
+        help="A flag to turn off training and use the provided output file"
+    )
     args = parser.parse_args()
 
-    builder = FinBERTSignalBuilder(aggregation_window_minutes=args.window)
-    builder.run(args.silver_sentiment, args.bronze_news, args.output)
+    # NOTE A tweak to bypass training and directly use pre-trained output file
+    output_file = Path(args.output)
+    if args.skip_training == True and output_file.exists():
+        print(f'TWEAK: Bypass training and use output file directly: {output_file}')
+    else:
+        builder = FinBERTSignalBuilder(aggregation_window_minutes=args.window)
+        builder.run(args.silver_sentiment, args.bronze_news, args.output)
 
 
 if __name__ == "__main__":
