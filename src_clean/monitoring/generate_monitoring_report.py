@@ -4,13 +4,13 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gold-features-file", required=True)
+    parser.add_argument("--gold-market-features-file", required=True)
     args = parser.parse_args()
 
     print('=== Evidently Monitoring Report ===')
 
     # Check if required files exist
-    features_file = Path(args.gold_features_file)
+    features_file = Path(args.gold_market_features_file)
     if not features_file.exists():
         print('⚠ Features file not found, skipping monitoring report')
         print('  (This is expected on first run)')
