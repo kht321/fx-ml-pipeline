@@ -1,10 +1,10 @@
 aiohttp==3.13.1
-alembic==1.17.0
+alembic
 altair==5.5.0
 beautifulsoup4==4.14.2
 annotated-types==0.7.0
 anyio==4.11.0
-attrs==25.4.0
+attrs
 Authlib==1.6.5
 bigtree==1.0.0
 blinker==1.9.0
@@ -85,7 +85,7 @@ opentelemetry-proto==1.38.0
 opentelemetry-sdk==1.38.0
 opentelemetry-semantic-conventions==0.59b0
 optuna==3.6.1
-packaging==25.0
+packaging
 pandas==2.3.3
 parse==1.20.2
 partd==1.4.2
@@ -106,7 +106,7 @@ pydantic_core==2.41.4
 pydeck==0.9.1
 Pygments==2.19.2
 PyJWT==2.10.1
-pyparsing==3.2.5
+pyparsing
 pyperclip==1.11.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
@@ -157,6 +157,5 @@ websockets==15.0.1
 Werkzeug==3.1.1
 lightgbm==4.0.0
 xgboost==3.0.5
-optuna==4.1.0
 pmdarima==2.0.4
 zipp==3.23.0
