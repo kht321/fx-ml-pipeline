@@ -58,7 +58,16 @@ class FinBERTSignalBuilder:
             self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 
             # Use GPU if available, otherwise CPU
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Check for NVIDIA GPU
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            # Check for Apple Silicon (M1/M2/M3) GPU
+            elif torch.backends.mps.is_available():
+                self.device = "mps"
+            # Default to CPU
+            else:
+                self.device = "cpu"            
+
             self.model.to(self.device)
             self.model.eval()
 
