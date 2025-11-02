@@ -8,7 +8,7 @@ def main():
     parser.add_argument("--model-path", required=True)
     args = parser.parse_args()
 
-    print('=== Model Selection: Comparing XGBoost, LightGBM, ARIMAX ===')
+    print('=== Model Selection: Comparing XGBoost, LightGBM, ARIMAX, AR ===')
 
     models_base = Path(args.model_path)
     model_types = ['xgboost', 'lightgbm', 'arima']
@@ -89,11 +89,12 @@ def main():
         # Save selection metadata
         selection_info = {
             'selected_model': best_model,
+            'selected_model_name': best_model_path.name,
             'test_rmse': best_rmse,
             'test_mae': best_metrics.get('test_mae', None),
             'oot_rmse': best_metrics.get('oot_rmse', None),
             'oot_mae': best_metrics.get('oot_mae', None),
-            'model_path': str(prod_model_path)
+            'model_path': str(prod_model_path),
         }
 
         with open(production_dir / 'selection_info.json', 'w') as f:
