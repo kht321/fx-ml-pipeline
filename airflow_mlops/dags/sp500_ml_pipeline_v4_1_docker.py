@@ -340,53 +340,11 @@ print('=== Start SP500 End to End ML Pipeline ===')
                     entrypoint=[],
                     docker_url=DOCKER_URL,
                     command=[
-                        'python3', '-c',
-                        """
-import pandas as pd
-import sys
-from pathlib import Path
-
-print('=== Gold Data Quality Validation ===')
-
-# Check market features
-features_file = Path('/data_clean/gold/market/features/spx500_features.csv')
-if not features_file.exists():
-    print(f'ERROR: Features file not found: {features_file}')
-    sys.exit(1)
-
-df_features = pd.read_csv(features_file)
-print(f'✓ Features file loaded: {len(df_features):,} rows')
-
-# Check for missing values
-missing_pct = (df_features.isnull().sum() / len(df_features) * 100)
-critical_missing = missing_pct[missing_pct > 50]
-if len(critical_missing) > 0:
-    print(f'ERROR: Critical missing values (>50%):')
-    print(critical_missing)
-    sys.exit(1)
-
-print(f'✓ Missing values check passed (max: {missing_pct.max():.2f}%)')
-
-# Check labels
-labels_file = Path('/data_clean/gold/market/labels/spx500_labels_30min.csv')
-if not labels_file.exists():
-    print(f'ERROR: Labels file not found: {labels_file}')
-    sys.exit(1)
-
-df_labels = pd.read_csv(labels_file)
-print(f'✓ Labels file loaded: {len(df_labels):,} rows')
-
-# Check news signals
-news_file = Path('/data_clean/gold/news/signals/sp500_trading_signals.csv')
-if news_file.exists():
-    df_news = pd.read_csv(news_file)
-    print(f'✓ News signals loaded: {len(df_news):,} rows')
-else:
-    print('⚠ News signals file not found (optional)')
-
-print('✓ Gold data quality validation PASSED')
-                        """
-                    ],
+                        'python3', '-m', 'src_clean.data_pipelines.gold.validate_gold_data_quality',
+                        '--gold-market-features-file', f"{GOLD_MARKET}/features/spx500_features.csv",
+                        '--gold-market-labels-file', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
+                        '--gold-news-signal-file', f"{GOLD_MARKET}/news/signals/sp500_trading_signals.csv",
+                    ],                    
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
                     mount_tmp_dir=False,
@@ -592,7 +550,7 @@ print('✓ Gold data quality validation PASSED')
             docker_url=DOCKER_URL,
             command=[
                 'python3', '-m', 'src_clean.monitoring.generate_monitoring_report',
-                '--gold-features-file', f"{GOLD_MARKET}/features/spx500_features.csv",
+                '--gold-market-features-file', f"{GOLD_MARKET}/features/spx500_features.csv",
             ],
             mounts=MOUNTS,
             network_mode=NETWORK_MODE,
@@ -610,82 +568,3 @@ market_silver >> build_market_features
 news_silver >> build_news_signals
 gold_data_mart >> model_training >> model_selection_deployment >> model_monitoring
 
-
-# # 1. Validate bronze data first
-# validate_bronze_data >> silver_processing
-
-# # 2. Silver layer processes in parallel
-# # (all tasks in silver_processing TaskGroup run in parallel)
-
-# # 3. Gold layer depends on silver completion
-# silver_processing >> gold_processing
-
-# # 4. Validate gold data quality before training
-# gold_processing >> validate_gold_quality
-
-# # 5. Train 3 models in parallel (XGBoost, LightGBM, ARIMAX)
-# validate_gold_quality >> [train_xgboost_model, train_lightgbm_model, train_arima_model]
-
-# # 6. Select best model based on RMSE
-# [train_xgboost_model, train_lightgbm_model, train_arima_model] >> select_best_model
-
-# # 7. Validate selected model output
-# select_best_model >> validate_model_output
-
-# # 8. Register selected model to MLflow
-# validate_model_output >> register_model_mlflow
-
-# # 8. Deploy model to production
-# register_model_mlflow >> deploy_model
-
-# # 9. Generate monitoring report after deployment
-# deploy_model >> generate_monitoring_report
-
-# ============================================================================
-# PIPELINE SUMMARY
-# ============================================================================
-#
-# Complete Production ML Pipeline Flow with 3-Model Selection:
-#
-#   1. validate_bronze_data
-#      ↓
-#   2. silver_processing (4 tasks in parallel):
-#      - technical_features
-#      - microstructure_features
-#      - volatility_features
-#      - news_sentiment
-#      ↓
-#   3. gold_processing (3 tasks):
-#      - build_market_features
-#      - build_news_signals
-#      - generate_labels_30min (depends on build_market_features)
-#      ↓
-#   4. validate_gold_data_quality
-#      ↓
-#   5. model_training (3 tasks in parallel - ALL with news integration):
-#      - train_xgboost_regression
-#      - train_lightgbm_regression
-#      - train_arima_regression (ARIMAX with exogenous news variables)
-#      ↓
-#   6. select_best_model_by_rmse (NEW - compares all 3 models)
-#      ↓
-#   7. validate_model_output
-#      ↓
-#   8. register_model_to_mlflow (registers best model)
-#      ↓
-#   9. deploy_model_to_production
-#      ↓
-#  10. generate_evidently_report
-#
-# Total Tasks: 16
-#   - 1 bronze validation
-#   - 4 silver processing (parallel)
-#   - 3 gold processing
-#   - 1 gold quality validation
-#   - 3 model training (parallel - XGBoost, LightGBM, ARIMAX)
-#   - 1 model selection
-#   - 1 model validation
-#   - 1 MLflow registration
-#   - 1 production deployment
-#   - 1 monitoring report
-#
