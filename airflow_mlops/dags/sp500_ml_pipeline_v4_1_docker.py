@@ -28,7 +28,7 @@ DOCKER_URL = 'unix://var/run/docker.sock'
 MOUNTS = [
     Mount(source='/path/to/working_dir/fx-ml-pipeline/data_clean', target='/data_clean', type='bind'),
     Mount(source='/path/to/working_dir/fx-ml-pipeline/src_clean', target='/app/src_clean', type='bind'),
-    Mount(source='/path/to/working_dir/fx-ml-pipeline/models', target='/data_clean/models', type='bind'),
+    Mount(source='/path/to/working_dir/fx-ml-pipeline/data_clean/models', target='/data_clean/models', type='bind'),
 ]
 
 # Path is based on MOUNTS as we are using DockerOperator
@@ -449,8 +449,36 @@ print('=== Start SP500 End to End ML Pipeline ===')
         #     dag=dag,
         # )
 
+        # Train Autoregressive OLS Model
+        train_ar_model = DockerOperator(
+            task_id='train_ar_regression',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.training.ar_training_pipeline_mlflow',
+                '--market-features', f"{GOLD_MARKET}/features/spx500_features.csv",
+                '--news-signals', f"{GOLD_NEWS}/signals/sp500_trading_signals.parquet",
+                '--labels', f"{GOLD_MARKET}/labels/spx500_labels_30min.csv",
+                '--prediction-horizon', '30',
+                '--output-dir', f"{MODELS_BANK}/ar",
+                '--experiment-name', 'sp500_ar_v4',
+                '--mlflow-uri', 'http://ml-mlflow:5000'
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            environment={
+                'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
+            },
+            mount_tmp_dir=False,
+            mem_limit='4g',
+            dag=dag,
+        )
+
         # [train_xgboost_model, train_lightgbm_model, train_arima_model]
-        [train_xgboost_model, train_lightgbm_model]
+        [train_xgboost_model, train_lightgbm_model, train_ar_model]
 
     # ============================================================================
     # STAGE 3: Model Selection & Deployment

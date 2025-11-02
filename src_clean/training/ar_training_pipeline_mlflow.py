@@ -811,6 +811,7 @@ def main() -> None:
     args = parser.parse_args()
 
     mlflow.set_tracking_uri(args.mlflow_uri)
+    mlflow.set_registry_uri(args.mlflow_uri)
 
     pipeline = AutoregressiveOLSMLflowTrainingPipeline(
         market_features_path=args.market_features,
