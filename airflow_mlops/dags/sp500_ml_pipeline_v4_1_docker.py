@@ -1,0 +1,691 @@
+"""
+S&P 500 ML Pipeline V4 - Complete End-to-End Production DAG
+
+This DAG implements a complete ML pipeline from bronze data to deployed model:
+  1. DATA VALIDATION: Validate existing bronze data
+  2. SILVER LAYER: Bronze → Silver feature engineering (parallel)
+  3. GOLD LAYER: Silver → Gold aggregation + label generation
+  4. TRAINING: Train XGBoost regression model
+  5. DEPLOYMENT: Deploy best model to production
+
+Repository: airflow_mlops/dags/sp500_ml_pipeline_v4_1_docker.py
+"""
+
+import os
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.providers.docker.operators.docker import DockerOperator
+from airflow.utils.task_group import TaskGroup
+from docker.types import Mount
+
+# Docker configuration
+DOCKER_IMAGE = 'fx-ml-pipeline-worker:latest'
+NETWORK_MODE = 'fx-ml-pipeline_ml-network'
+DOCKER_URL = 'unix://var/run/docker.sock'
+
+# Volume mounts - shared between all tasks
+# NOTE: Change this to your working directory: /path/to/working_dir/
+MOUNTS = [
+    Mount(source='/Users/dracbook/devroot/python/cs611/fx-ml-pipeline/data_clean', target='/data_clean', type='bind'),
+    Mount(source='/Users/dracbook/devroot/python/cs611/fx-ml-pipeline/src_clean', target='/app/src_clean', type='bind'),
+    Mount(source='/Users/dracbook/devroot/python/cs611/fx-ml-pipeline/models', target='/data_clean/models', type='bind'),
+]
+
+# Path is based on MOUNTS as we are using DockerOperator
+RAW_DATA = "/data_clean/raw" 
+DATAMART = "/data_clean" # TODO should rename to /datamart
+BRONZE_MARKET = f"{DATAMART}/bronze/market"
+BRONZE_NEWS = f"{DATAMART}/bronze/news"
+SILVER_MARKET = f"{DATAMART}/silver/market"
+SILVER_NEWS = f"{DATAMART}/silver/news"
+GOLD_MARKET = f"{DATAMART}/gold/market"
+GOLD_NEWS = f"{DATAMART}/gold/news"
+MODELS_BANK = f"{DATAMART}/models"
+
+# Raw data
+# NOTE To save processing time, switch to smaller data set instead of 5 years file (significant slower)
+NEWS_DATA_ZIP = "historical_5year.zip"
+# NEWS_DATA_DIR = f'{BRONZE_NEWS}/historical_5year/' # <-- change here
+NEWS_DATA_DIR = f'{BRONZE_NEWS}/' # <-- change here
+# MARKET_DATA_FILE= "spx500_usd_m1_5years.ndjson" # <-- change here
+MARKET_DATA_FILE= "spx500_usd_m1_2years.ndjson" # <-- change here
+MARKET_DATA_ZIP = f"{MARKET_DATA_FILE}.zip"  # 
+
+default_args = {
+    'owner': 'ml-team',
+    'depends_on_past': False,
+    'start_date': datetime(2025, 10, 26),
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+    'max_active_runs': 1,
+}
+
+# Create DAG
+DAG_ID="sp500_ml_pipeline_v4_1_docker"
+with DAG(
+    dag_id=DAG_ID,
+    default_args=default_args,
+    description='Complete end-to-end S&P 500 ML pipeline: Bronze→Silver→Gold→Training→Deployment',
+    # schedule_interval='0 2 * * *',  # Daily at 2 AM UTC
+    schedule_interval=None,
+    catchup=False,
+    tags=['production', 'ml', 'sp500', 'end-to-end'],
+) as dag:
+
+    start = DockerOperator(
+        task_id='start',
+        image=DOCKER_IMAGE,
+        api_version='auto',
+        auto_remove=True,
+        entrypoint=[],
+        docker_url=DOCKER_URL,
+        command=[
+            'python3', '-c',
+            """
+print('=== Start SP500 End to End ML Pipeline ===')
+            """
+        ],
+        mounts=MOUNTS,
+        network_mode=NETWORK_MODE,
+        mount_tmp_dir=False,
+        dag=dag,
+    )
+
+    # ========================================================================
+    # Stage 1: Medallion Dual Data Pipeline
+    # ========================================================================
+    with TaskGroup("medallion_dual_data_pipeline", tooltip="Medallion Data Pipeline") as medallion_dual_data_pipeline:
+        # ===================================
+        # Stage 1.1: Raw data ingestion into Bronze layer
+        # ===================================
+        with TaskGroup("bronze_data_lake", tooltip="Raw data ingestion into Bronze layer") as bronze_data_lake:
+
+            ingest_market = DockerOperator(
+                task_id='ingest_market_raw_to_bronze',
+                image=DOCKER_IMAGE,
+                api_version='auto',
+                auto_remove=True,
+                entrypoint=[],
+                docker_url=DOCKER_URL,
+                command=[
+                    'python3', '-m', 'src_clean.data_pipelines.bronze.ingest_raw_data',
+                    '--raw-data-file', os.path.join(RAW_DATA, MARKET_DATA_ZIP),
+                    '--bronze-path', BRONZE_MARKET,
+                ],
+                mounts=MOUNTS,
+                network_mode=NETWORK_MODE,
+                mount_tmp_dir=False,
+                dag=dag,
+            )
+
+            ingest_news = DockerOperator(
+                task_id='ingest_news_raw_to_bronze',
+                image=DOCKER_IMAGE,
+                api_version='auto',
+                auto_remove=True,
+                entrypoint=[],
+                docker_url=DOCKER_URL,
+                command=[
+                    'python3', '-m', 'src_clean.data_pipelines.bronze.ingest_raw_data',
+                    '--raw-data-file', os.path.join(RAW_DATA, NEWS_DATA_ZIP),
+                    '--bronze-path', BRONZE_NEWS,
+                ],
+                mounts=MOUNTS,
+                network_mode=NETWORK_MODE,
+                mount_tmp_dir=False,
+                dag=dag,
+            )
+
+            validate_bronze_data = DockerOperator(
+                task_id='validate_bronze_data',
+                image=DOCKER_IMAGE,
+                api_version='auto',
+                auto_remove=True,
+                entrypoint=[],
+                docker_url=DOCKER_URL,
+                command=[
+                    'python3', '-m', 'src_clean.data_pipelines.bronze.validate_bronze_data',
+                    '--data-file', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
+                ],
+                mounts=MOUNTS,
+                network_mode=NETWORK_MODE,
+                mount_tmp_dir=False,
+                dag=dag,
+            )
+
+            [ingest_market, ingest_news] >> validate_bronze_data
+
+        # ============================================================================
+        # STAGE 1.2: Build silver-layer: data cleaning, filtering, augmentation
+        # ============================================================================
+        with TaskGroup("silver_data_mart", tooltip="Build silver-layer: data cleaning, filtering, augmentation") as silver_data_mart:
+            # ===================================
+            # STAGE 1.2.1: Market data processing
+            # ===================================
+            with TaskGroup("market_silver", tooltip="Process market data at silver layer") as market_silver:
+
+                process_technical = DockerOperator(
+                    task_id='process_technical',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.silver.market_technical_processor',
+                        '--input', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
+                        '--output', '/data_clean/silver/market/technical/spx500_technical.csv'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='12g',
+                    dag=dag,
+                )
+
+                process_microstructure = DockerOperator(
+                    task_id='process_microstructure',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.silver.market_microstructure_processor',
+                        '--input', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
+                        '--output', '/data_clean/silver/market/microstructure/spx500_microstructure.csv'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='10g',
+                    dag=dag,
+                )
+
+                process_volatility = DockerOperator(
+                    task_id='process_volatility',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.silver.market_volatility_processor',
+                        '--input', os.path.join(BRONZE_MARKET, MARKET_DATA_FILE),
+                        '--output', '/data_clean/silver/market/volatility/spx500_volatility.csv'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='10g',
+                    dag=dag,
+                )
+
+                # Run market features in parallel
+                [process_technical, process_microstructure, process_volatility]
+
+            # ===================================
+            # STAGE 1.2.2: News data processing
+            # ===================================
+            with TaskGroup("news_silver", tooltip="Process news data at silver layer") as news_silver:
+
+                process_news_sentiment = DockerOperator(
+                    task_id='process_news_sentiment',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.silver.news_sentiment_processor',
+                        '--input-dir', NEWS_DATA_DIR,
+                        '--output', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='8g',
+                    dag=dag,
+                )
+
+        # ============================================================================
+        # STAGE 1.3: Gold Datamart - Features Engineering, Business-lelve Aggregation and Label Generation
+        # ============================================================================
+        with TaskGroup("gold_data_mart", tooltip="Features Engineering, Business-lelve Aggregation and Label Generation", dag=dag) as gold_data_mart:
+            # ===================================
+            # STAGE 1.3.1: Feature store
+            # ===================================
+            with TaskGroup(group_id="gold_feature_store") as gold_feature_store:
+
+                build_market_features = DockerOperator(
+                    task_id='build_market_features',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.gold.market_gold_builder',
+                        '--technical', '/data_clean/silver/market/technical/spx500_technical.csv',
+                        '--microstructure', '/data_clean/silver/market/microstructure/spx500_microstructure.csv',
+                        '--volatility', '/data_clean/silver/market/volatility/spx500_volatility.csv',
+                        '--output', '/data_clean/gold/market/features/spx500_features.csv'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='6g',
+                    dag=dag,
+                )
+
+                build_news_signals = DockerOperator(
+                    task_id='build_news_signals',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.gold.news_signal_builder',
+                        '--silver-sentiment', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv',
+                        '--bronze-news', NEWS_DATA_DIR,
+                        '--output', '/data_clean/gold/news/signals/spx500_trading_signals.parquet',
+                        '--window', '60'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='8g',
+                    dag=dag,
+                )
+
+                [build_market_features, build_news_signals]
+
+            # ===================================
+            # STAGE 1.3.2: Label store
+            # ===================================
+            with TaskGroup(group_id="gold_label_store") as gold_label_store:
+
+                generate_labels = DockerOperator(
+                    task_id='generate_labels_30min',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-m', 'src_clean.data_pipelines.gold.label_generator',
+                        '--input', '/data_clean/gold/market/features/spx500_features.csv',
+                        '--output', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                        '--horizon', '30',
+                        # '--threshold', '0.0'
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    mem_limit='6g',
+                    dag=dag,
+                )
+
+                # ===================================
+                # STAGE 1.3.3: Gold data quality validation
+                # ===================================
+                validate_gold_quality = DockerOperator(
+                    task_id='validate_gold_data_quality',
+                    image=DOCKER_IMAGE,
+                    api_version='auto',
+                    auto_remove=True,
+                    entrypoint=[],
+                    docker_url=DOCKER_URL,
+                    command=[
+                        'python3', '-c',
+                        """
+import pandas as pd
+import sys
+from pathlib import Path
+
+print('=== Gold Data Quality Validation ===')
+
+# Check market features
+features_file = Path('/data_clean/gold/market/features/spx500_features.csv')
+if not features_file.exists():
+    print(f'ERROR: Features file not found: {features_file}')
+    sys.exit(1)
+
+df_features = pd.read_csv(features_file)
+print(f'✓ Features file loaded: {len(df_features):,} rows')
+
+# Check for missing values
+missing_pct = (df_features.isnull().sum() / len(df_features) * 100)
+critical_missing = missing_pct[missing_pct > 50]
+if len(critical_missing) > 0:
+    print(f'ERROR: Critical missing values (>50%):')
+    print(critical_missing)
+    sys.exit(1)
+
+print(f'✓ Missing values check passed (max: {missing_pct.max():.2f}%)')
+
+# Check labels
+labels_file = Path('/data_clean/gold/market/labels/spx500_labels_30min.csv')
+if not labels_file.exists():
+    print(f'ERROR: Labels file not found: {labels_file}')
+    sys.exit(1)
+
+df_labels = pd.read_csv(labels_file)
+print(f'✓ Labels file loaded: {len(df_labels):,} rows')
+
+# Check news signals
+news_file = Path('/data_clean/gold/news/signals/sp500_trading_signals.csv')
+if news_file.exists():
+    df_news = pd.read_csv(news_file)
+    print(f'✓ News signals loaded: {len(df_news):,} rows')
+else:
+    print('⚠ News signals file not found (optional)')
+
+print('✓ Gold data quality validation PASSED')
+                        """
+                    ],
+                    mounts=MOUNTS,
+                    network_mode=NETWORK_MODE,
+                    mount_tmp_dir=False,
+                    dag=dag,
+                )
+
+                generate_labels >> validate_gold_quality
+
+            # Gold features must be built before labels
+            gold_feature_store >> gold_label_store
+
+    # ============================================================================
+    # STAGE 2: Model Training
+    # ============================================================================
+    with TaskGroup(group_id="model_training") as model_training:
+
+        # Train XGBoost Model
+        train_xgboost_model = DockerOperator(
+            task_id='train_xgboost_regression',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.training.xgboost_training_pipeline_mlflow',
+                '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
+                '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+                '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                '--prediction-horizon', '30',
+                '--task', 'regression',
+                '--output-dir', f"{MODELS_BANK}/xgboost",
+                '--experiment-name', 'sp500_xgboost_v4',
+                '--mlflow-uri', 'http://ml-mlflow:5000'
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            environment={
+                'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
+            },
+            mount_tmp_dir=False,
+            mem_limit='4g',
+            dag=dag,
+        )
+
+        # Train LightGBM Model
+        train_lightgbm_model = DockerOperator(
+            task_id='train_lightgbm_regression',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.training.lightgbm_training_pipeline_mlflow',
+                '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
+                '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+                '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                '--prediction-horizon', '30',
+                '--task', 'regression',
+                '--output-dir', f"{MODELS_BANK}/lightgbm",
+                '--experiment-name', 'sp500_lightgbm_v4',
+                '--mlflow-uri', 'http://ml-mlflow:5000'
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            environment={
+                'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
+            },
+            mount_tmp_dir=False,
+            mem_limit='4g',
+            dag=dag,
+        )
+
+        # Train ARIMAX Model
+        train_arima_model = DockerOperator(
+            task_id='train_arima_regression',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.training.arima_training_pipeline_mlflow',
+                '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
+                '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+                '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
+                '--prediction-horizon', '30',
+                '--output-dir', f"{MODELS_BANK}/arima",
+                '--experiment-name', 'sp500_arimax_v4',
+                '--mlflow-uri', 'http://ml-mlflow:5000'
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            environment={
+                'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
+            },
+            mount_tmp_dir=False,
+            mem_limit='4g',
+            dag=dag,
+        )
+
+        [train_xgboost_model, train_lightgbm_model, train_arima_model]
+
+    # ============================================================================
+    # STAGE 3: Model Selection & Deployment
+    # ============================================================================
+    with TaskGroup(group_id="model_selection_deployment") as model_selection_deployment:
+        # ============================================================================
+        # STAGE 3.1: Model Selection
+        # ============================================================================
+        select_best_model = DockerOperator(
+            task_id='select_best_model_by_rmse',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.deployment.select_best_model_by_rmse',
+                '--model-path', MODELS_BANK,
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            mount_tmp_dir=False,
+            dag=dag,
+        )
+
+        # ============================================================================
+        # STAGE 3.2: Model Validation & Registration
+        # ============================================================================
+        validate_model_output = DockerOperator(
+            task_id='validate_model_output',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.deployment.validate_model_output',
+                '--prod-path', f"{MODELS_BANK}/production",
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            mount_tmp_dir=False,
+            dag=dag,
+        )
+
+        register_model_mlflow = DockerOperator(
+            task_id='register_model_to_mlflow',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.deployment.register_model_to_mlflow',
+                '--prod-path', f"{MODELS_BANK}/production",
+                '--mlflow-uri', 'http://ml-mlflow:5000'
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            environment={
+                'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
+            },
+            mount_tmp_dir=False,
+            dag=dag,
+        )
+
+        # ============================================================================
+        # STAGE 3.2: Model Deployment
+        # ============================================================================
+        deploy_model = DockerOperator(
+            task_id='deploy_model_to_production',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.deployment.deploy_model_to_production',
+                '--model-path', MODELS_BANK,
+                '--prod-path', f"{MODELS_BANK}/production",
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            mount_tmp_dir=False,
+            dag=dag,
+        )
+
+        select_best_model >> validate_model_output >> register_model_mlflow >> deploy_model
+
+    # ============================================================================
+    # STAGE 4: Monitoring & Drift Detection
+    # ============================================================================
+    with TaskGroup(group_id="model_monitoring") as model_monitoring:
+        generate_monitoring_report = DockerOperator(
+            task_id='generate_evidently_report',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-m', 'src_clean.monitoring.generate_monitoring_report',
+                '--gold-features-file', f"{GOLD_MARKET}/features/spx500_features.csv",
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            mount_tmp_dir=False,
+            dag=dag,
+        )
+
+# ============================================================================
+# DAG DEPENDENCIES
+# ============================================================================
+
+start >> [ingest_market, ingest_news]
+bronze_data_lake >> silver_data_mart
+market_silver >> build_market_features
+news_silver >> build_news_signals
+gold_data_mart >> model_training >> model_selection_deployment >> model_monitoring
+
+
+# # 1. Validate bronze data first
+# validate_bronze_data >> silver_processing
+
+# # 2. Silver layer processes in parallel
+# # (all tasks in silver_processing TaskGroup run in parallel)
+
+# # 3. Gold layer depends on silver completion
+# silver_processing >> gold_processing
+
+# # 4. Validate gold data quality before training
+# gold_processing >> validate_gold_quality
+
+# # 5. Train 3 models in parallel (XGBoost, LightGBM, ARIMAX)
+# validate_gold_quality >> [train_xgboost_model, train_lightgbm_model, train_arima_model]
+
+# # 6. Select best model based on RMSE
+# [train_xgboost_model, train_lightgbm_model, train_arima_model] >> select_best_model
+
+# # 7. Validate selected model output
+# select_best_model >> validate_model_output
+
+# # 8. Register selected model to MLflow
+# validate_model_output >> register_model_mlflow
+
+# # 8. Deploy model to production
+# register_model_mlflow >> deploy_model
+
+# # 9. Generate monitoring report after deployment
+# deploy_model >> generate_monitoring_report
+
+# ============================================================================
+# PIPELINE SUMMARY
+# ============================================================================
+#
+# Complete Production ML Pipeline Flow with 3-Model Selection:
+#
+#   1. validate_bronze_data
+#      ↓
+#   2. silver_processing (4 tasks in parallel):
+#      - technical_features
+#      - microstructure_features
+#      - volatility_features
+#      - news_sentiment
+#      ↓
+#   3. gold_processing (3 tasks):
+#      - build_market_features
+#      - build_news_signals
+#      - generate_labels_30min (depends on build_market_features)
+#      ↓
+#   4. validate_gold_data_quality
+#      ↓
+#   5. model_training (3 tasks in parallel - ALL with news integration):
+#      - train_xgboost_regression
+#      - train_lightgbm_regression
+#      - train_arima_regression (ARIMAX with exogenous news variables)
+#      ↓
+#   6. select_best_model_by_rmse (NEW - compares all 3 models)
+#      ↓
+#   7. validate_model_output
+#      ↓
+#   8. register_model_to_mlflow (registers best model)
+#      ↓
+#   9. deploy_model_to_production
+#      ↓
+#  10. generate_evidently_report
+#
+# Total Tasks: 16
+#   - 1 bronze validation
+#   - 4 silver processing (parallel)
+#   - 3 gold processing
+#   - 1 gold quality validation
+#   - 3 model training (parallel - XGBoost, LightGBM, ARIMAX)
+#   - 1 model selection
+#   - 1 model validation
+#   - 1 MLflow registration
+#   - 1 production deployment
+#   - 1 monitoring report
+#
