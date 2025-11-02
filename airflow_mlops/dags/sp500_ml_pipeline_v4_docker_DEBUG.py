@@ -46,12 +46,12 @@ default_args = {
 
 # Create DAG
 dag = DAG(
-    'sp500_ml_pipeline_v4_docker',
+    'sp500_ml_pipeline_DEBUG_fast',
     default_args=default_args,
-    description='Complete end-to-end S&P 500 ML pipeline: Bronze→Silver→Gold→Training→Deployment',
-    schedule_interval='0 2 * * *',  # Daily at 2 AM UTC
+    description='[DEBUG - NO FINBERT] Fast pipeline for testing: Bronze→Silver→Gold→Training→Deployment',
+    schedule_interval=None,  # Manual only
     catchup=False,
-    tags=['production', 'ml', 'sp500', 'end-to-end'],
+    tags=['debug', 'fast', 'no-finbert'],
 )
 
 # ============================================================================
@@ -158,24 +158,25 @@ with TaskGroup("silver_processing", tooltip="Bronze→Silver feature engineering
         dag=dag,
     )
 
-    process_news_sentiment = DockerOperator(
-        task_id='news_sentiment',
-        image=DOCKER_IMAGE,
-        api_version='auto',
-        auto_remove=True,
-        entrypoint=[],
-        docker_url=DOCKER_URL,
-        command=[
-            'python3', '-m', 'src_clean.data_pipelines.silver.news_sentiment_processor',
-            '--input-dir', '/data_clean/bronze/news/historical_5year/',
-            '--output', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv'
-        ],
-        mounts=MOUNTS,
-        network_mode=NETWORK_MODE,
-        mount_tmp_dir=False,
-        mem_limit='8g',
-        dag=dag,
-    )
+    # DISABLED FOR FAST DEBUG - FinBERT takes 60+ minutes
+    # process_news_sentiment = DockerOperator(
+    #     task_id='news_sentiment',
+    #     image=DOCKER_IMAGE,
+    #     api_version='auto',
+    #     auto_remove=True,
+    #     entrypoint=[],
+    #     docker_url=DOCKER_URL,
+    #     command=[
+    #         'python3', '-m', 'src_clean.data_pipelines.silver.news_sentiment_processor',
+    #         '--input-dir', '/data_clean/bronze/news/historical_5year/',
+    #         '--output', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv'
+    #     ],
+    #     mounts=MOUNTS,
+    #     network_mode=NETWORK_MODE,
+    #     mount_tmp_dir=False,
+    #     mem_limit='8g',
+    #     dag=dag,
+    # )
 
 # ============================================================================
 # STAGE 3: GOLD LAYER - AGGREGATION & LABEL GENERATION
@@ -200,30 +201,31 @@ with TaskGroup("gold_processing", tooltip="Silver→Gold aggregation + labels", 
         mounts=MOUNTS,
         network_mode=NETWORK_MODE,
         mount_tmp_dir=False,
-        mem_limit='10g',
+        mem_limit='16g',
         dag=dag,
     )
 
-    build_news_signals = DockerOperator(
-        task_id='build_news_signals',
-        image=DOCKER_IMAGE,
-        api_version='auto',
-        auto_remove=True,
-        entrypoint=[],
-        docker_url=DOCKER_URL,
-        command=[
-            'python3', '-m', 'src_clean.data_pipelines.gold.news_signal_builder',
-            '--silver-sentiment', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv',
-            '--bronze-news', '/data_clean/bronze/news/historical_5year/',
-            '--output', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
-            '--window', '60'
-        ],
-        mounts=MOUNTS,
-        network_mode=NETWORK_MODE,
-        mount_tmp_dir=False,
-        mem_limit='12g',
-        dag=dag,
-    )
+    # DISABLED FOR FAST DEBUG - FinBERT signal aggregation takes 60+ minutes
+    # build_news_signals = DockerOperator(
+    #     task_id='build_news_signals',
+    #     image=DOCKER_IMAGE,
+    #     api_version='auto',
+    #     auto_remove=True,
+    #     entrypoint=[],
+    #     docker_url=DOCKER_URL,
+    #     command=[
+    #         'python3', '-m', 'src_clean.data_pipelines.gold.news_signal_builder',
+    #         '--silver-sentiment', '/data_clean/silver/news/sentiment/sp500_news_sentiment.csv',
+    #         '--bronze-news', '/data_clean/bronze/news/historical_5year/',
+    #         '--output', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+    #         '--window', '60'
+    #     ],
+    #     mounts=MOUNTS,
+    #     network_mode=NETWORK_MODE,
+    #     mount_tmp_dir=False,
+    #     mem_limit='12g',
+    #     dag=dag,
+    # )
 
     generate_labels = DockerOperator(
         task_id='generate_labels_30min',
@@ -342,7 +344,7 @@ train_xgboost_model = DockerOperator(
         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
     },
     mount_tmp_dir=False,
-    mem_limit='16g',
+    mem_limit='28g',
     dag=dag,
 )
 
@@ -371,26 +373,27 @@ train_lightgbm_model = DockerOperator(
         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
     },
     mount_tmp_dir=False,
-    mem_limit='16g',
+    mem_limit='16g',  # Reduced memory limit for compatibility
     dag=dag,
 )
 
 # Train ARIMAX Model
-train_arima_model = DockerOperator(
-    task_id='train_arima_regression',
+train_ar_model = DockerOperator(
+    task_id='train_ar_regression',
     image=DOCKER_IMAGE,
     api_version='auto',
     auto_remove=True,
     entrypoint=[],
     docker_url=DOCKER_URL,
     command=[
-        'python3', '-m', 'src_clean.training.arima_training_pipeline_mlflow',
+        'python3', '-m', 'src_clean.training.ar_training_pipeline_mlflow',
         '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-        '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
         '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
         '--prediction-horizon', '30',
-        '--output-dir', '/models/arima',
-        '--experiment-name', 'sp500_arimax_v4',
+        '--lag-min', '1',
+        '--lag-max', '7',
+        '--output-dir', '/models/ar',
+        '--experiment-name', 'sp500_ar_v4',
         '--mlflow-uri', 'http://ml-mlflow:5000'
     ],
     mounts=MOUNTS,
@@ -399,7 +402,7 @@ train_arima_model = DockerOperator(
         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
     },
     mount_tmp_dir=False,
-    mem_limit='16g',
+    mem_limit='28g',
     dag=dag,
 )
 
@@ -421,10 +424,10 @@ import json
 import shutil
 from pathlib import Path
 
-print('=== Model Selection: Comparing XGBoost, LightGBM, ARIMAX ===')
+print('=== Model Selection: Comparing XGBoost, LightGBM, AR ===')
 
 models_base = Path('/models')
-model_types = ['xgboost', 'lightgbm', 'arima']
+model_types = ['xgboost', 'lightgbm', 'ar']
 
 # Find metrics for each model
 best_model = None
@@ -808,11 +811,11 @@ silver_processing >> gold_processing
 # 4. Validate gold data quality before training
 gold_processing >> validate_gold_quality
 
-# 5. Train 3 models in parallel (XGBoost, LightGBM, ARIMAX)
-validate_gold_quality >> [train_xgboost_model, train_lightgbm_model, train_arima_model]
+# 5. Train 3 models in parallel (XGBoost, LightGBM, AR)
+validate_gold_quality >> [train_xgboost_model, train_lightgbm_model, train_ar_model]
 
 # 6. Select best model based on RMSE
-[train_xgboost_model, train_lightgbm_model, train_arima_model] >> select_best_model
+[train_xgboost_model, train_lightgbm_model, train_ar_model] >> select_best_model
 
 # 7. Validate selected model output
 select_best_model >> validate_model_output
