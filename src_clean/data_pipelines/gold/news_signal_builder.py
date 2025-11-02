@@ -475,8 +475,8 @@ def main():
 
     # NOTE A tweak to bypass training and directly use pre-trained output file
     output_file = Path(args.output)
-    if args.skip_training == True and output_file.exists():
-        print(f'TWEAK: Bypass training and use output file directly: {output_file}')
+    if args.skip_training == "skip" and output_file.exists():
+        print(f'BYPASS training and use output file directly: {output_file}')
     else:
         builder = FinBERTSignalBuilder(aggregation_window_minutes=args.window)
         builder.run(args.silver_sentiment, args.bronze_news, args.output)

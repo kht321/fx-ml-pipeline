@@ -50,7 +50,7 @@ NEWS_DATA_DIR = f'{BRONZE_NEWS}/historical_5year/' # <-- change here
 MARKET_DATA_FILE= "spx500_usd_m1_5years.ndjson" # <-- change here
 # MARKET_DATA_FILE= "spx500_usd_m1_2years.ndjson" # <-- change here
 MARKET_DATA_ZIP = f"{MARKET_DATA_FILE}.zip"  # 
-SKIP_NEWS_SIGNAL_BUILDING = True # Set to False if you want to train from fresh; For True to work,  GOLD_NEWS/signals/spx500_trading_signals.parquet must be presented 
+SKIP_NEWS_SIGNAL_BUILDING = "skip" # Set to "non_skip" if you want to train from fresh; For True to work,  GOLD_NEWS/signals/spx500_trading_signals.parquet must be presented 
 
 default_args = {
     'owner': 'ml-team',
@@ -75,8 +75,8 @@ with DAG(
     tags=['production', 'ml', 'sp500', 'end-to-end'],
 ) as dag:
 
-    start = DockerOperator(
-        task_id='start',
+    news_data = DockerOperator(
+        task_id='news_data',
         image=DOCKER_IMAGE,
         api_version='auto',
         auto_remove=True,
@@ -85,7 +85,7 @@ with DAG(
         command=[
             'python3', '-c',
             """
-print('=== Start SP500 End to End ML Pipeline ===')
+print('=== News Data Arrival ===')
             """
         ],
         mounts=MOUNTS,
@@ -94,6 +94,24 @@ print('=== Start SP500 End to End ML Pipeline ===')
         dag=dag,
     )
 
+    market_data = DockerOperator(
+            task_id='market_data',
+            image=DOCKER_IMAGE,
+            api_version='auto',
+            auto_remove=True,
+            entrypoint=[],
+            docker_url=DOCKER_URL,
+            command=[
+                'python3', '-c',
+                """
+print('=== Markket Data Arrival ===')
+                """
+            ],
+            mounts=MOUNTS,
+            network_mode=NETWORK_MODE,
+            mount_tmp_dir=False,
+            dag=dag,
+        )
     # ========================================================================
     # Stage 1: Medallion Dual Data Pipeline
     # ========================================================================
@@ -293,8 +311,8 @@ print('=== Start SP500 End to End ML Pipeline ===')
                         '--silver-sentiment', f"{SILVER_NEWS}/sentiment/sp500_news_sentiment.csv",
                         '--bronze-news', NEWS_DATA_DIR,
                         '--output', f"{GOLD_NEWS}/signals/spx500_trading_signals.parquet",
-                        '--window', '60'
-                        '--skip-training', SKIP_NEWS_SIGNAL_BUILDING
+                        '--window', '60',
+                        '--skip-training', SKIP_NEWS_SIGNAL_BUILDING,
                     ],
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
@@ -593,7 +611,8 @@ print('=== Start SP500 End to End ML Pipeline ===')
 # DAG DEPENDENCIES
 # ============================================================================
 
-start >> [ingest_market, ingest_news]
+news_data >> ingest_news
+market_data >> ingest_market
 bronze_data_lake >> silver_data_mart
 market_silver >> build_market_features
 news_silver >> build_news_signals
