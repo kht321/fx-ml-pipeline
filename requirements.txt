@@ -27,6 +27,7 @@ docker==7.1.0
 docstring_parser==0.17.0
 docutils==0.22.2
 email-validator==2.3.0
+evidently
 exceptiongroup==1.3.0
 fastapi==0.119.0
 fastmcp==2.12.5
@@ -84,10 +85,8 @@ opentelemetry-api==1.38.0
 opentelemetry-proto==1.38.0
 opentelemetry-sdk==1.38.0
 opentelemetry-semantic-conventions==0.59b0
-optuna==4.1.0
-packaging==25.0
-optuna==3.6.1
 packaging
+optuna==3.6.1
 pandas==2.3.3
 parse==1.20.2
 partd==1.4.2

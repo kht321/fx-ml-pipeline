@@ -30,8 +30,12 @@ current_path = "C:/Users/gabjj/Desktop/Education/MITB/CS611/project/fx-ml-pipeli
 MOUNTS = [    
     Mount(source=f'{current_path}/data_clean', target='/data_clean', type='bind'),
     Mount(source=f'{current_path}/src_clean', target='/app/src_clean', type='bind'),
-    Mount(source=f'{current_path}/models', target='/data_clean/models', type='bind'),
+    Mount(source=f'{current_path}/models', target='/models', type='bind'),
 ]
+
+print(f"✓ Configured mounts:")
+for mount in MOUNTS:
+    print(f"  - {mount['Source']} -> {mount['Target']}")
 
 # Path is based on MOUNTS as we are using DockerOperator
 RAW_DATA = "/data_clean/raw" 
@@ -42,7 +46,7 @@ SILVER_MARKET = f"{DATAMART}/silver/market"
 SILVER_NEWS = f"{DATAMART}/silver/news"
 GOLD_MARKET = f"{DATAMART}/gold/market"
 GOLD_NEWS = f"{DATAMART}/gold/news"
-MODELS_BANK = f"{DATAMART}/models"
+MODELS_BANK = f"/models"
 
 # Raw data
 # NOTE To save processing time, switch to smaller data set instead of 5 years file (significant slower)
@@ -601,7 +605,9 @@ print('=== Markket Data Arrival ===')
             docker_url=DOCKER_URL,
             command=[
                 'python3', '-m', 'src_clean.monitoring.generate_monitoring_report',
-                '--gold-market-features-file', f"{GOLD_MARKET}/features/spx500_features.csv",
+                '--gold-market-features-file', f"{GOLD_MARKET}/features/spx500_features.parquet",
+                '--gold-market-labels-file', f"{GOLD_MARKET}/labels/spx500_labels_30min.parquet",
+                '--predictions-file', f"{DATAMART}/predictions/spx500_batch_scores.parquet",
             ],
             mounts=MOUNTS,
             network_mode=NETWORK_MODE,
