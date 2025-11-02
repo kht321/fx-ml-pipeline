@@ -37,9 +37,10 @@ import xgboost as xgb
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import (
     classification_report, confusion_matrix, roc_auc_score,
-    accuracy_score
+    accuracy_score, root_mean_squared_error, mean_absolute_error
 )
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import seaborn as sns
 from joblib import dump
 import mlflow
@@ -120,6 +121,7 @@ class XGBoostMLflowTrainingPipeline:
         task: str = "classification",
         experiment_name: str = "sp500_prediction",
         enable_tuning: bool = False,
+        accelerate_dataset: Optional[bool] = False,
         stage1_n_trials: int=5,
         stage2_n_trials: int=5
     ):
@@ -149,13 +151,16 @@ class XGBoostMLflowTrainingPipeline:
         self.labels_path = labels_path
         self.news_signals_path = news_signals_path
         self.prediction_horizon = prediction_horizon_minutes
-        self.output_dir = output_dir
+        self.prediction_horizon_minutes = prediction_horizon_minutes  # for other class dependencies
+        run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.output_dir = output_dir / f"{experiment_name}_{run_timestamp}"
         self.task = task
         self.experiment_name = experiment_name
         self.enable_tuning = enable_tuning
+        self.accelerate_dataset = accelerate_dataset
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.hyperparameter_dir = self.output_dir / "hyperparameters" / self.experiment_name
+        self.hyperparameter_dir = self.output_dir / "hyperparameters" 
         self.stage1_n_trials = stage1_n_trials
         self.stage2_n_trials = stage2_n_trials
 
@@ -491,7 +496,9 @@ class XGBoostMLflowTrainingPipeline:
         y_train_val = pd.concat([y_train, y_val])
 
         # Start MLflow run
-        with mlflow.start_run():
+        with mlflow.start_run(
+            run_name=f"{self.experiment_name}_XGB_{datetime.now():%Y%m%d_%H%M%S}"
+        ):
             # Log parameters
             mlflow.log_param("prediction_horizon_minutes", self.prediction_horizon)
             mlflow.log_param("task_type", self.task)
@@ -573,17 +580,159 @@ class XGBoostMLflowTrainingPipeline:
             X_test_sel = X_test[selected_feature_names]
             X_oot_sel = X_oot[selected_feature_names]
 
-            train_metrics = self._evaluate_model(model, X_train_sel, y_train, prefix="train")
+            train_metrics, y_train_pred = self._evaluate_model(model, X_train_sel, y_train, prefix="train")
             logger.info(f"Train: {self._format_metrics(train_metrics)}")
 
-            val_metrics = self._evaluate_model(model, X_val_sel, y_val, prefix="val")
+            val_metrics, y_val_pred = self._evaluate_model(model, X_val_sel, y_val, prefix="val")
             logger.info(f"Val:   {self._format_metrics(val_metrics)}")
 
-            test_metrics = self._evaluate_model(model, X_test_sel, y_test, prefix="test")
+            test_metrics, y_test_pred = self._evaluate_model(model, X_test_sel, y_test, prefix="test")
             logger.info(f"Test:  {self._format_metrics(test_metrics)}")
 
-            oot_metrics = self._evaluate_model(model, X_oot_sel, y_oot, prefix="oot")
+            oot_metrics, y_oot_pred = self._evaluate_model(model, X_oot_sel, y_oot, prefix="oot")
             logger.info(f"OOT:   {self._format_metrics(oot_metrics)}")
+
+            # ===================================================================
+            # 1. Compile predictions dataframe
+            # ===================================================================
+            predictions_list = []
+            
+            # Train split
+            for timestamp, pred, actual in zip(time_index.loc[splits["train_idx"]], y_train_pred, y_train):
+                predictions_list.append({
+                    'timestamp': timestamp,
+                    'split': 'train',
+                    'prediction': pred,
+                    'actual': actual
+                })
+            
+            # Validation split
+            for timestamp, pred, actual in zip(time_index.loc[splits["val_idx"]], y_val_pred, y_val):
+                predictions_list.append({
+                    'timestamp': timestamp,
+                    'split': 'val',
+                    'prediction': pred,
+                    'actual': actual
+                })
+            
+            # Test split
+            for timestamp, pred, actual in zip(time_index.loc[splits["test_idx"]], y_test_pred, y_test):
+                predictions_list.append({
+                    'timestamp': timestamp,
+                    'split': 'test',
+                    'prediction': pred,
+                    'actual': actual
+                })
+            
+            # OOT split
+            for timestamp, pred, actual in zip(time_index.loc[splits["oot_idx"]], y_oot_pred, y_oot):
+                predictions_list.append({
+                    'timestamp': timestamp,
+                    'split': 'oot',
+                    'prediction': pred,
+                    'actual': actual
+                })
+            
+            predictions_df = pd.DataFrame(predictions_list)
+            logger.info(f"Compiled {len(predictions_df)} predictions across all splits")
+            
+            # ===================================================================
+            # 2. Save predictions to CSV
+            # ===================================================================
+            predictions_path = Path(self.output_dir /  self.experiment_name)
+            predictions_path.mkdir(parents=True, exist_ok=True)
+            predictions_path = predictions_path / "predictions_vs_actuals.csv"
+            predictions_df.to_csv(predictions_path, index=False)
+            logger.info(f"Saved predictions to {predictions_path}")
+            
+            # ===================================================================
+            # 3. Create and save time-trend plot
+            # ===================================================================
+            # Set academic style
+            plt.style.use('seaborn-v0_8-whitegrid')
+            mpl.rcParams.update({
+                'figure.dpi': 160,
+                'savefig.dpi': 160,
+                'axes.spines.top': False,
+                'axes.spines.right': False,
+                'axes.labelsize': 11,
+                'axes.titlesize': 13,
+                'xtick.labelsize': 9,
+                'ytick.labelsize': 9,
+                'legend.frameon': False,
+                'grid.alpha': 0.25,
+            })
+            
+            fig, ax = plt.subplots(figsize=(14, 5), layout='constrained')
+            
+            # Plot actuals and predictions
+            ax.plot(predictions_df['timestamp'], predictions_df['actual'], 
+                    label='Actual', color='#264653', linewidth=1.5, alpha=0.9)
+            ax.plot(predictions_df['timestamp'], predictions_df['prediction'], 
+                    label='Predicted', color='#e76f51', linewidth=1.5, alpha=0.8, 
+                    linestyle='--')
+            
+            # Define split colors
+            split_colors = {
+                'train': '#2a9d8f',
+                'val': '#e9c46a', 
+                'test': '#f4a261',
+                'oot': '#e76f51'
+            }
+            
+            # Add vertical lines and labels for split boundaries
+            for split_name in ['train', 'val', 'test', 'oot']:
+                split_data = predictions_df[predictions_df['split'] == split_name]
+                
+                if not split_data.empty:
+                    boundary = split_data['timestamp'].iloc[0]
+                    
+                    # Vertical line at split boundary
+                    ax.axvline(boundary, color=split_colors[split_name], 
+                              linestyle='--', linewidth=1.5, alpha=0.5)
+                    
+                    # Add split label at top
+                    y_pos = ax.get_ylim()[1] * 0.95
+                    ax.text(boundary, y_pos, f'  {split_name.upper()}',
+                           rotation=0, verticalalignment='top',
+                           fontsize=10, fontweight='bold',
+                           color=split_colors[split_name],
+                           bbox=dict(boxstyle='round,pad=0.3', 
+                                    facecolor='white', 
+                                    edgecolor=split_colors[split_name],
+                                    alpha=0.8))
+            
+            # Calculate and display metrics per split
+            metrics_text = []
+            for split_name in ['train', 'val', 'test', 'oot']:
+                split_data = predictions_df[predictions_df['split'] == split_name]
+                if not split_data.empty:
+                    mae = mean_absolute_error(split_data['actual'], split_data['prediction'])
+                    rmse = root_mean_squared_error(split_data['actual'], split_data['prediction'])
+                    metrics_text.append(f"{split_name.upper()}: MAE={mae:.4f}, RMSE={rmse:.4f}")
+            
+            # Add metrics box
+            metrics_str = '\n'.join(metrics_text)
+            ax.text(0.02, 0.02, metrics_str,
+                   transform=ax.transAxes,
+                   verticalalignment='bottom',
+                   fontsize=8,
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+            
+            # Labels and title
+            ax.set_xlabel('Timestamp', fontsize=11)
+            ax.set_ylabel(f'Return ({self.prediction_horizon_minutes}min)', fontsize=11)
+            ax.set_title(f'Predictions vs Actuals - XGBoost Model', 
+                        fontsize=13, fontweight='bold', pad=15)
+            ax.legend(loc='upper right', fontsize=10)
+            
+            # Rotate x-axis labels for better readability
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Save figure
+            plot_path = Path(predictions_path.parent / "predictions_vs_actuals.png")
+            plt.savefig(plot_path, bbox_inches='tight', dpi=160)
+            plt.close()
 
             # Aggregate all metrics
             metrics = {
@@ -657,9 +806,23 @@ class XGBoostMLflowTrainingPipeline:
         #grid = self.param_grid
 
         def _suggest_params(trial: optuna.Trial) -> Dict[str, float]:
+            lr = trial.suggest_float("learning_rate", 0.01, 0.3, log=True)
+
+            # Conditional upper bound for n_estimators based on lr
+            if lr < 0.07:
+                n_estimators_hi = 3000*3
+                n_estimators_lo = 600
+            elif lr < 0.2:
+                n_estimators_hi = 1500*3
+                n_estimators_lo = 300
+            else:
+                n_estimators_hi = 600*3
+                n_estimators_lo = 100
+            
             params = {
             # learning capacity / complexity
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+            "learning_rate": lr,
+            "n_estimators": trial.suggest_int("n_estimators", n_estimators_lo, n_estimators_hi),
             "max_depth": trial.suggest_int("max_depth", 3, 10),
             "gamma": trial.suggest_float("gamma", 0.0, 5.0),  # minimum split loss
 
@@ -863,7 +1026,7 @@ class XGBoostMLflowTrainingPipeline:
                 f'{prefix}_r2' if prefix else 'r2': float(model.score(X, y))
             }
 
-        return metrics
+        return metrics, y_pred
 
     def _plot_feature_importance_mlflow(self, model: xgb.XGBModel, feature_names: list):
         """Plot and log feature importance to MLflow."""
@@ -924,6 +1087,9 @@ class XGBoostMLflowTrainingPipeline:
 
         # Validate labels are present
         market_df = self.validate_labels(market_df)
+        if self.accelerate_dataset:
+            market_df = market_df.head(10000)
+            logger.info("Dataset accelerated for TESTING ENVIRONMENT: using first 10,000 samples for training.")
 
         # Merge with news
         combined_df = self.merge_market_news(market_df, news_df)
