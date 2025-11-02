@@ -56,6 +56,28 @@
             </button>
         </div>
 
+        <div class="custom-news-panel">
+            <h3>✏️ Custom News Simulation</h3>
+            <p class="custom-subtitle">Type your own news headline and let the system analyze sentiment</p>
+
+            <div class="custom-input-container">
+                <textarea
+                    id="custom-news-text"
+                    class="custom-news-input"
+                    placeholder="e.g., 'S&P 500 surges to new record high on strong earnings' or 'Market fears intensify amid recession concerns'"
+                    rows="4"
+                ></textarea>
+
+                <div class="custom-controls">
+                    <button class="btn btn-custom" onclick="streamCustomNews()">
+                        <span class="emoji">📝</span>
+                        <span class="btn-text">Analyze & Stream</span>
+                    </button>
+                    <button class="btn-clear" onclick="clearCustomInput()">Clear</button>
+                </div>
+            </div>
+        </div>
+
         <div class="last-article" id="last-article" style="display: none;">
             <h3>Last Streamed Article</h3>
             <div class="article-content">
