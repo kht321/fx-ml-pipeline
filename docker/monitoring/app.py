@@ -96,9 +96,9 @@ def generate():
 
 @app.get("/")
 def index():
-    if not os.path.exists(REPORT_HTML):
+    if not os.path.exists(REPORT_FEATURES_HTML) and not os.path.exists(REPORT_DRIFT_HTML):
         try:
             build_report()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Generate failed: {e}")
-    return FileResponse(REPORT_HTML, media_type="text/html")
+    return FileResponse(REPORT_FEATURES_HTML, media_type="text/html")
