@@ -266,6 +266,14 @@ class TechnicalFeaturesProcessor:
         result['return_10'] = df['close'].pct_change(10)
         result['return_30'] = df['close'].pct_change(30)
         result['return_60'] = df['close'].pct_change(60)
+        result['return_90'] = df['close'].pct_change(90)
+        result['return_120'] = df['close'].pct_change(120)
+        result['return_150'] = df['close'].pct_change(150)
+        result['return_180'] = df['close'].pct_change(180)
+        result['return_210'] = df['close'].pct_change(210)
+        result['return_240'] = df['close'].pct_change(240)
+        result['return_270'] = df['close'].pct_change(270)
+        result['return_360'] = df['close'].pct_change(360)
 
         # RSI
         result['rsi_14'] = self.compute_rsi(df['close'], period=14)
