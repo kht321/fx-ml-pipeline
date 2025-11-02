@@ -435,10 +435,17 @@ class XGBoostMLflowTrainingPipeline:
         y_sorted = y.loc[sorted_idx]
         time_sorted = time_index.loc[sorted_idx]
 
+        """
+        2025-11-02 18:14:11,633 - INFO - Train: 1575039 samples (60%) | 2020-10-13 21:25:00+00:00 to 2023-10-12 16:03:00+00:00
+        2025-11-02 18:14:11,633 - INFO - Val:   525013 samples (20%) | 2023-10-12 16:04:00+00:00 to 2024-10-11 06:16:00+00:00
+        2025-11-02 18:14:11,633 - INFO - Test:  262506 samples (10%) | 2024-10-11 06:17:00+00:00 to 2025-04-11 13:22:00+00:00
+        2025-11-02 18:14:11,633 - INFO - OOT:   262507 samples (10%) | 2025-04-11 13:23:00+00:00 to 2025-10-10 20:29:00+00:00
+        """
+
         n = len(X_sorted)
-        train_end = int(n * train_ratio)
-        val_end = int(n * (train_ratio + val_ratio))
-        test_end = int(n * (train_ratio + val_ratio + test_ratio))
+        train_end = np.where(time_sorted==pd.to_datetime('2023-10-12 16:03:00+00:00'))[0][0]  #int(n * train_ratio)
+        val_end = np.where(time_sorted==pd.to_datetime('2024-10-11 06:16:00+00:00'))[0][0]  #int(n * (train_ratio + val_ratio))
+        test_end = np.where(time_sorted==pd.to_datetime('2025-04-11 13:22:00+00:00'))[0][0]  #int(n * (train_ratio + val_ratio + test_ratio))
 
         splits = {
             'train_idx': X_sorted.index[:train_end],
