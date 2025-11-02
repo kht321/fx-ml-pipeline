@@ -58,7 +58,16 @@ class FinBERTSignalBuilder:
             self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 
             # Use GPU if available, otherwise CPU
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Check for NVIDIA GPU
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            # Check for Apple Silicon (M1/M2/M3) GPU
+            elif torch.backends.mps.is_available():
+                self.device = "mps"
+            # Default to CPU
+            else:
+                self.device = "cpu"            
+
             self.model.to(self.device)
             self.model.eval()
 
@@ -116,6 +125,62 @@ class FinBERTSignalBuilder:
             'neutral_prob': float(scores[2])
         }
 
+    def analyze_batch_with_finbert(self, texts: List[str], batch_size: int = 32) -> List[Dict]:
+        """
+        Run FinBERT sentiment analysis on a batch of texts.
+        Much faster than processing one at a time.
+
+        Args:
+            texts: List of article texts (headline + body)
+            batch_size: Number of texts to process at once
+
+        Returns:
+            List of dicts with sentiment, confidence, and class scores
+        """
+        all_results = []
+
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+
+            # Tokenize batch
+            inputs = self.tokenizer(
+                batch_texts,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            )
+
+            # Move to device
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                probs = torch.softmax(outputs.logits, dim=-1)
+
+            # Process each result in batch
+            batch_scores = probs.cpu().numpy()
+
+            for scores in batch_scores:
+                labels = ['positive', 'negative', 'neutral']
+                sentiment_dict = dict(zip(labels, scores))
+                predicted_label = max(sentiment_dict, key=sentiment_dict.get)
+                confidence = sentiment_dict[predicted_label]
+
+                # Convert to numeric sentiment score (-1 to 1)
+                sentiment_score = float(scores[0] - scores[1])
+
+                all_results.append({
+                    'sentiment': predicted_label,
+                    'sentiment_score': sentiment_score,
+                    'confidence': float(confidence),
+                    'positive_prob': float(scores[0]),
+                    'negative_prob': float(scores[1]),
+                    'neutral_prob': float(scores[2])
+                })
+
+        return all_results
+
     def load_article_bodies(self, bronze_news_dir: Path) -> Dict[str, str]:
         """
         Load full article bodies from bronze layer.
@@ -160,14 +225,16 @@ class FinBERTSignalBuilder:
         logger.info(f"Loaded {len(article_bodies)} article bodies")
         return article_bodies
 
-    def process_articles(self, silver_df: pd.DataFrame, article_bodies: Dict[str, str]) -> pd.DataFrame:
-        """Process all articles with FinBERT."""
-        logger.info(f"Processing {len(silver_df)} articles with FinBERT...")
+    def process_articles(self, silver_df: pd.DataFrame, article_bodies: Dict[str, str], batch_size: int = 64) -> pd.DataFrame:
+        """Process all articles with FinBERT using batch processing for speed."""
+        logger.info(f"Processing {len(silver_df)} articles with FinBERT (batch_size={batch_size})...")
 
-        results = []
+        # Prepare all texts and metadata
+        texts_to_process = []
+        article_metadata = []
         skipped = 0
 
-        for idx, row in tqdm(silver_df.iterrows(), total=len(silver_df), desc="FinBERT Analysis"):
+        for idx, row in silver_df.iterrows():
             article_id = row.get('article_id')
 
             # Get full article text from bronze
@@ -181,27 +248,56 @@ class FinBERTSignalBuilder:
                 skipped += 1
                 continue
 
-            # Run FinBERT
-            try:
-                finbert_result = self.analyze_with_finbert(full_text)
-            except Exception as e:
-                logger.warning(f"FinBERT analysis failed for article {article_id}: {e}")
-                skipped += 1
-                continue
-
-            # Combine with original data
-            result = {
+            texts_to_process.append(full_text)
+            article_metadata.append({
                 'article_id': article_id,
                 'published_at': row.get('published_at'),
                 'source': row.get('source'),
-                'headline': row.get('headline', '')[:100],
-                **finbert_result
-            }
-
-            results.append(result)
+                'headline': row.get('headline', '')[:100]
+            })
 
         if skipped > 0:
-            logger.warning(f"Skipped {skipped} articles due to errors or missing text")
+            logger.warning(f"Skipped {skipped} articles due to missing text")
+
+        # Process all texts in batches (much faster!)
+        logger.info(f"Running FinBERT on {len(texts_to_process)} articles in batches of {batch_size}...")
+
+        # Wrap batch processing with progress bar
+        num_batches = (len(texts_to_process) + batch_size - 1) // batch_size
+        finbert_results = []
+
+        with tqdm(total=len(texts_to_process), desc="FinBERT Batch Analysis") as pbar:
+            for i in range(0, len(texts_to_process), batch_size):
+                batch_texts = texts_to_process[i:i + batch_size]
+
+                try:
+                    batch_results = self.analyze_batch_with_finbert(batch_texts, batch_size=len(batch_texts))
+                    finbert_results.extend(batch_results)
+                except Exception as e:
+                    logger.error(f"Batch processing failed: {e}")
+                    # Fallback to single processing for this batch
+                    for text in batch_texts:
+                        try:
+                            result = self.analyze_with_finbert(text)
+                            finbert_results.append(result)
+                        except Exception as e2:
+                            logger.warning(f"Single analysis also failed: {e2}")
+                            finbert_results.append({
+                                'sentiment': 'neutral',
+                                'sentiment_score': 0.0,
+                                'confidence': 0.0,
+                                'positive_prob': 0.0,
+                                'negative_prob': 0.0,
+                                'neutral_prob': 1.0
+                            })
+
+                pbar.update(len(batch_texts))
+
+        # Combine metadata with FinBERT results
+        results = []
+        for metadata, finbert_result in zip(article_metadata, finbert_results):
+            result = {**metadata, **finbert_result}
+            results.append(result)
 
         results_df = pd.DataFrame(results)
         results_df['published_at'] = pd.to_datetime(results_df['published_at'], utc=True)

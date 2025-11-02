@@ -1,9 +1,10 @@
 """
 ARIMA Training Pipeline with MLflow Integration - 30-Minute Price Prediction
 
-This pipeline replaces the previous XGBoost-based workflow with an Auto-ARIMA
-approach that uses only market (X) features and their lags as exogenous
-variables. It enforces stationarity on the target series and prevents data
+This pipeline uses Auto-ARIMA with exogenous variables (ARIMAX) that includes:
+- Market features and their lags
+- News sentiment signals and their lags
+The approach enforces stationarity on the target series and prevents data
 leakage by respecting time-order splits throughout training and evaluation.
 """
 
@@ -36,6 +37,7 @@ class ARIMAMLflowTrainingPipeline:
         self,
         market_features_path: Path,
         labels_path: Optional[Path] = None,
+        news_signals_path: Optional[Path] = None,
         prediction_horizon_minutes: int = 30,
         output_dir: Path = Path("data_clean/models"),
         task: str = "regression",
@@ -55,6 +57,8 @@ class ARIMAMLflowTrainingPipeline:
             Path to Gold layer market features CSV.
         labels_path : Path, optional
             Path to Gold layer labels CSV (if not provided, will be inferred).
+        news_signals_path : Path, optional
+            Path to Gold layer news signals CSV.
         prediction_horizon_minutes : int
             Number of minutes ahead to predict (default: 30).
         output_dir : Path
@@ -79,6 +83,7 @@ class ARIMAMLflowTrainingPipeline:
 
         self.market_features_path = market_features_path
         self.labels_path = labels_path
+        self.news_signals_path = news_signals_path
         self.prediction_horizon = prediction_horizon_minutes
         self.output_dir = output_dir
         self.task = task
@@ -94,10 +99,15 @@ class ARIMAMLflowTrainingPipeline:
         # Set up MLflow
         mlflow.set_experiment(experiment_name)
 
-    def load_data(self) -> pd.DataFrame:
-        """Load market features and labels; return merged DataFrame."""
+    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Load market features, labels, and news signals from Gold layer."""
         logger.info("Loading market features from Gold layer...")
-        market_df = pd.read_csv(self.market_features_path)
+
+        # Load market features (support both CSV and Parquet)
+        if str(self.market_features_path).endswith('.parquet'):
+            market_df = pd.read_parquet(self.market_features_path)
+        else:
+            market_df = pd.read_csv(self.market_features_path)
         market_df["time"] = pd.to_datetime(market_df["time"])
         market_df = market_df.sort_values("time").reset_index(drop=True)
         logger.info("Loaded market features: %d rows, %d columns", len(market_df), len(market_df.columns))
@@ -150,7 +160,19 @@ class ARIMAMLflowTrainingPipeline:
 
         logger.info("Merged dataset: %d rows after join", len(merged_df))
 
-        return merged_df
+        # Load news signals if available (support both CSV and Parquet)
+        news_df = None
+        if self.news_signals_path and self.news_signals_path.exists():
+            if str(self.news_signals_path).endswith('.parquet'):
+                news_df = pd.read_parquet(self.news_signals_path)
+            else:
+                news_df = pd.read_csv(self.news_signals_path)
+            news_df['signal_time'] = pd.to_datetime(news_df['signal_time'])
+            logger.info(f"Loaded news signals: {len(news_df)} rows, {len(news_df.columns)} columns")
+        else:
+            logger.warning("No news signals provided - using market features only")
+
+        return merged_df, news_df
 
     def validate_labels(self, df: pd.DataFrame) -> pd.DataFrame:
         """Validate that labels are present and log statistics."""
@@ -164,9 +186,69 @@ class ARIMAMLflowTrainingPipeline:
         logger.info("Target stats: mean=%.6f, std=%.6f", df["target"].mean(), df["target"].std())
 
         return df
+
+    def merge_market_news(
+        self,
+        market_df: pd.DataFrame,
+        news_df: Optional[pd.DataFrame],
+        tolerance_hours: int = 6
+    ) -> pd.DataFrame:
+        """Merge market features with news signals using as-of join."""
+        if news_df is None or news_df.empty:
+            logger.info("No news data - using market features only")
+            return market_df
+
+        logger.info("Merging market features with news signals...")
+
+        merged_rows = []
+        tolerance = pd.Timedelta(hours=tolerance_hours)
+
+        market_df = market_df.sort_values('time')
+        news_df = news_df.sort_values('signal_time')
+
+        news_features = [
+            'signal_time', 'avg_sentiment', 'signal_strength',
+            'trading_signal', 'article_count', 'quality_score'
+        ]
+        available_news = [c for c in news_features if c in news_df.columns]
+
+        for _, market_row in market_df.iterrows():
+            market_time = market_row['time']
+            news_cutoff = market_time - tolerance
+            eligible_news = news_df[
+                (news_df['signal_time'] <= market_time) &
+                (news_df['signal_time'] >= news_cutoff)
+            ]
+
+            merged_row = market_row.to_dict()
+
+            if not eligible_news.empty:
+                latest_news = eligible_news.iloc[-1]
+                for col in available_news:
+                    if col != 'signal_time':
+                        merged_row[f'news_{col}'] = latest_news[col]
+                news_age_minutes = (market_time - latest_news['signal_time']).total_seconds() / 60
+                merged_row['news_age_minutes'] = news_age_minutes
+                merged_row['news_available'] = 1
+            else:
+                for col in available_news:
+                    if col != 'signal_time':
+                        merged_row[f'news_{col}'] = 0.0
+                merged_row['news_age_minutes'] = np.nan
+                merged_row['news_available'] = 0
+
+            merged_rows.append(merged_row)
+
+        combined_df = pd.DataFrame(merged_rows)
+
+        logger.info(f"Merged dataset: {len(combined_df)} observations")
+        news_coverage = combined_df['news_available'].mean()
+        logger.info(f"News coverage: {news_coverage:.1%}")
+
+        return combined_df
     def prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, pd.Series, list]:
-        """Prepare market-only features and create lagged exogenous variables."""
-        logger.info("Preparing lagged market features (no news)...")
+        """Prepare market AND news features and create lagged exogenous variables."""
+        logger.info("Preparing lagged market + news features for ARIMAX...")
 
         df = df.sort_values("time").reset_index(drop=True)
 
@@ -189,7 +271,8 @@ class ARIMAMLflowTrainingPipeline:
             "fold"
         }
 
-        feature_cols = [c for c in df.columns if c not in exclude_cols and not c.startswith("news_")]
+        # INCLUDE news features - removed the "not c.startswith("news_")" filter
+        feature_cols = [c for c in df.columns if c not in exclude_cols]
 
         X = df[feature_cols].copy()
         y = df["target"].astype(float).copy()
@@ -397,6 +480,7 @@ class ARIMAMLflowTrainingPipeline:
             mlflow.log_param("n_test_samples", len(X_test))
             mlflow.log_param("n_oot_samples", len(X_oot))
             mlflow.log_param("n_features", len(feature_names))
+            mlflow.log_param("news_available", 'news_available' in X.columns)
             mlflow.log_param("max_lag", self.max_lag)
             mlflow.log_param("max_p", self.max_p)
             mlflow.log_param("max_q", self.max_q)
@@ -483,13 +567,19 @@ class ARIMAMLflowTrainingPipeline:
     def run(self):
         """Execute the full training pipeline with MLflow."""
         logger.info("\n" + "=" * 80)
-        logger.info("ARIMA Training Pipeline with MLflow - %smin Prediction", self.prediction_horizon)
+        logger.info("ARIMAX Training Pipeline with MLflow - %smin Prediction", self.prediction_horizon)
         logger.info("=" * 80 + "\n")
 
-        market_df = self.load_data()
+        # Load data (market features + gold labels + news signals)
+        market_df, news_df = self.load_data()
+
+        # Validate labels are present
         market_df = self.validate_labels(market_df)
 
-        X, y, time_index, feature_names = self.prepare_features(market_df)
+        # Merge with news
+        combined_df = self.merge_market_news(market_df, news_df)
+
+        X, y, time_index, feature_names = self.prepare_features(combined_df)
 
         model, metrics = self.train_model(X, y, time_index, feature_names)
 
@@ -522,12 +612,17 @@ def main():
         "--market-features",
         type=Path,
         required=True,
-        help="Path to market features CSV (Gold layer)"
+        help="Path to market features CSV/Parquet (Gold layer)"
     )
     parser.add_argument(
         "--labels",
         type=Path,
         help="Path to labels CSV (Gold layer). If not provided, will be inferred from market features path."
+    )
+    parser.add_argument(
+        "--news-signals",
+        type=Path,
+        help="Path to news signals CSV/Parquet (Gold layer)"
     )
     parser.add_argument(
         "--prediction-horizon",
@@ -544,7 +639,7 @@ def main():
     parser.add_argument(
         "--experiment-name",
         type=str,
-        default="sp500_prediction",
+        default="sp500_prediction_arimax",
         help="MLflow experiment name"
     )
     parser.add_argument(
@@ -591,6 +686,7 @@ def main():
     pipeline = ARIMAMLflowTrainingPipeline(
         market_features_path=args.market_features,
         labels_path=args.labels,
+        news_signals_path=args.news_signals,
         prediction_horizon_minutes=args.prediction_horizon,
         output_dir=args.output_dir,
         task="regression",

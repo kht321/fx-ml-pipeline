@@ -1,6 +1,7 @@
 """Model inference engine with Feast integration."""
 
 import logging
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, List
@@ -8,6 +9,10 @@ import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Prediction logging directory
+PREDICTIONS_LOG_DIR = Path("data_clean/predictions")
+PREDICTIONS_LOG_FILE = PREDICTIONS_LOG_DIR / "prediction_log.jsonl"
 
 
 class ModelInference:
@@ -228,7 +233,7 @@ class ModelInference:
                 predicted_relative_change = None
                 task = "classification"
 
-            return {
+            result = {
                 "instrument": instrument,
                 "timestamp": timestamp,
                 "task": task,
@@ -241,6 +246,11 @@ class ModelInference:
                 "predicted_relative_change": predicted_relative_change,
                 "predicted_price": predicted_price,
             }
+
+            # Log prediction for monitoring
+            self._log_prediction(result, features)
+
+            return result
 
         except Exception as e:
             logger.error(f"Prediction error: {e}")
@@ -479,3 +489,42 @@ class ModelInference:
             pass
 
         return None
+
+    def _log_prediction(self, prediction: Dict, features: Dict) -> None:
+        """Log prediction to disk for monitoring and drift detection.
+
+        Args:
+            prediction: Prediction result dictionary
+            features: Features used for prediction
+        """
+        try:
+            # Ensure predictions directory exists
+            PREDICTIONS_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Create log entry
+            log_entry = {
+                "timestamp": prediction["timestamp"].isoformat() if isinstance(prediction["timestamp"], datetime) else prediction["timestamp"],
+                "instrument": prediction["instrument"],
+                "prediction": prediction["prediction"],
+                "probability": prediction.get("probability"),
+                "confidence": prediction["confidence"],
+                "signal_strength": prediction["signal_strength"],
+                "predicted_price": prediction.get("predicted_price"),
+                "predicted_relative_change": prediction.get("predicted_relative_change"),
+                "task": prediction["task"],
+                "model_version": prediction["model_version"],
+                "features_used": prediction["features_used"],
+                # Add key features for monitoring
+                "close": features.get("close"),
+                "rsi_14": features.get("rsi_14"),
+                "avg_sentiment": features.get("avg_sentiment"),
+            }
+
+            # Append to JSONL file
+            with open(PREDICTIONS_LOG_FILE, 'a') as f:
+                f.write(json.dumps(log_entry) + '\n')
+
+            logger.debug(f"Logged prediction for {prediction['instrument']} at {prediction['timestamp']}")
+
+        except Exception as e:
+            logger.error(f"Failed to log prediction: {e}")
