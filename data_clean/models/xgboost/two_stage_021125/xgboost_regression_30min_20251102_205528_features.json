@@ -1,0 +1,7 @@
+{
+  "features": [
+    "rs_vol",
+    "gk_vol",
+    "news_neutral_prob"
+  ]
+}

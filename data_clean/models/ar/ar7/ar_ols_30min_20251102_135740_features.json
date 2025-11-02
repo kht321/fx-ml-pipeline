@@ -1,0 +1,14 @@
+{
+  "features": [
+    "const",
+    "return_30",
+    "return_30_lag1",
+    "return_30_lag2",
+    "return_30_lag3",
+    "return_30_lag4",
+    "return_30_lag5",
+    "return_30_lag6",
+    "return_30_lag7"
+  ],
+  "selected_lag": 7
+}

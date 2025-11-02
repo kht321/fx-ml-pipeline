@@ -46,7 +46,13 @@ data_clean/gold/**/*.parquet
 data_clean/models/*.pkl
 data_clean/models/*.json
 data_clean/training_outputs/
-data_clean/
+data_clean/models/*
+
+!data_clean/models/
+!data_clean/models/ar/
+!data_clean/models/ar/ar7/**
+!data_clean/models/xgboost/
+!data_clean/models/xgboost/two_stage_021125/
 
 # Output files
 outputs/
@@ -165,3 +171,8 @@ notebooks/xgb_test/sp500_prediction_20251102_181330/hyperparameters/shap_summary
 notebooks/xgb_test/sp500_prediction_20251102_181330/hyperparameters/stage1_summary.json
 notebooks/xgb_test/sp500_prediction_20251102_181330/hyperparameters/stage2_summary.json
 notebooks/xgb_test/sp500_prediction_20251102_181330/sp500_prediction/predictions_vs_actuals.png
+data_clean/models/xgboost_classification_30min_20251102_163645_feature_importance.png
+data_clean/Latest Gold/market/features/spx500_features.parquet
+data_clean/Latest Gold/market/labels/spx500_labels_30min.parquet
+data_clean/Latest Gold/market/labels/spx500_labels_60min.parquet
+data_clean/Latest Gold/market/labels/spx500_labels_120min.parquet

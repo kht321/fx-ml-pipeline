@@ -1,0 +1,93 @@
+{
+  "selected_lag": 7,
+  "train_rmse_t30": 0.14268572791381287,
+  "train_mae_t30": 0.07271906309835013,
+  "val_rmse_t30": 0.09447321588906103,
+  "val_mae_t30": 0.0482736403239616,
+  "test_rmse_t30": 0.1750464101571934,
+  "test_mae_t30": 0.06968102551241769,
+  "oot_rmse_t30": 0.11035318137984887,
+  "oot_mae_t30": 0.05494841570196354,
+  "model_rsquared": 0.933467581947815,
+  "model_rsquared_adj": 0.9334673285242914,
+  "mlflow_run_id": "72aead9294e54a3d8192f4216c32aad1",
+  "feature_names": [
+    "const",
+    "return_30",
+    "return_30_lag1",
+    "return_30_lag2",
+    "return_30_lag3",
+    "return_30_lag4",
+    "return_30_lag5",
+    "return_30_lag6",
+    "return_30_lag7"
+  ],
+  "tuning_results": [
+    {
+      "lag": 1,
+      "val_rmse_target": 0.09597537088285758,
+      "val_mae_target": 0.04912427803116683,
+      "aic": -6044721.951594256,
+      "bic": -6044685.14188346,
+      "train_samples": 1575217,
+      "val_samples": 525073
+    },
+    {
+      "lag": 2,
+      "val_rmse_target": 0.09578687392329556,
+      "val_mae_target": 0.049012021137419155,
+      "aic": -6044854.773742259,
+      "bic": -6044805.694127864,
+      "train_samples": 1575217,
+      "val_samples": 525072
+    },
+    {
+      "lag": 3,
+      "val_rmse_target": 0.09550966535932019,
+      "val_mae_target": 0.0488461109945576,
+      "aic": -6045158.796376767,
+      "bic": -6045097.446861948,
+      "train_samples": 1575216,
+      "val_samples": 525072
+    },
+    {
+      "lag": 4,
+      "val_rmse_target": 0.09521679104580147,
+      "val_mae_target": 0.048669245724051735,
+      "aic": -6045522.697037371,
+      "bic": -6045449.077619589,
+      "train_samples": 1575216,
+      "val_samples": 525072
+    },
+    {
+      "lag": 5,
+      "val_rmse_target": 0.09501168786211946,
+      "val_mae_target": 0.04854489613751778,
+      "aic": -6045711.270714546,
+      "bic": -6045625.381398244,
+      "train_samples": 1575215,
+      "val_samples": 525072
+    },
+    {
+      "lag": 6,
+      "val_rmse_target": 0.09478411496980432,
+      "val_mae_target": 0.04840571784625451,
+      "aic": -6045958.002376389,
+      "bic": -6045859.8431628365,
+      "train_samples": 1575214,
+      "val_samples": 525072
+    },
+    {
+      "lag": 7,
+      "val_rmse_target": 0.09448391045079306,
+      "val_mae_target": 0.048220747551791496,
+      "aic": -6046421.2136390135,
+      "bic": -6046310.784523767,
+      "train_samples": 1575214,
+      "val_samples": 525071
+    }
+  ],
+  "n_effective_samples": 2625357,
+  "n_features": 9,
+  "horizon_steps": 30
+}
