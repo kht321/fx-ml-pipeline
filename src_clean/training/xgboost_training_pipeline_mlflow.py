@@ -1195,6 +1195,7 @@ def main():
 
     # Set MLflow tracking URI
     mlflow.set_tracking_uri(args.mlflow_uri)
+    mlflow.set_registry_uri(args.mlflow_uri)
 
     pipeline = XGBoostMLflowTrainingPipeline(
         market_features_path=args.market_features,

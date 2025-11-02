@@ -682,6 +682,7 @@ def main():
     args = parser.parse_args()
 
     mlflow.set_tracking_uri(args.mlflow_uri)
+    mlflow.set_registry_uri(args.mlflow_uri)
 
     pipeline = ARIMAMLflowTrainingPipeline(
         market_features_path=args.market_features,

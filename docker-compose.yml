@@ -49,8 +49,8 @@ services:
     container_name: ml-mlflow
     working_dir: /mlflow
     command: >
-      sh -c "pip install --no-cache-dir mlflow==2.20.4 psycopg2-binary==2.9.10 boto3==1.36.0 &&
-             mlflow server --backend-store-uri postgresql://mlops:mlops_password@postgres:5432/mlops --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000"
+      sh -c "pip install --no-cache-dir mlflow==3.5.0 psycopg2-binary==2.9.10 boto3==1.36.0 &&
+             mlflow server --backend-store-uri postgresql://mlops:mlops_password@postgres:5432/mlops --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000 --allowed-hosts 'ml-mlflow,ml-mlflow:5000,localhost,127.0.0.1,*'"
     ports:
       - "5001:5000"
     volumes:
