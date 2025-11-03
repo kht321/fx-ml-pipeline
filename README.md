@@ -168,6 +168,46 @@ Optimization Results:
 └─ Speedup:           20-30x faster
 ```
 
+### Model Performance Visualizations
+
+#### Comprehensive Model Comparison
+
+![Model Comparison](docs/figures/model_comparison.png)
+
+**Analysis:**
+- **RMSE Performance**: XGBoost and LightGBM show comparable test performance (~0.175 RMSE)
+- **Generalization**: Both tree-based models demonstrate strong OOT performance (~0.108-0.109 RMSE)
+- **Consistency**: Low variance between test and OOT sets indicates robust generalization
+- **Training Efficiency**: Models converge to similar validation scores despite different architectures
+
+#### Performance Metrics Dashboard
+
+![Metrics Dashboard](docs/figures/metrics_dashboard.png)
+
+**Key Insights:**
+- **Test vs OOT**: Models maintain consistent performance on out-of-time data
+- **Error Distribution**: MAE values (~0.054-0.070) show acceptable prediction accuracy for 30-minute horizon
+- **Model Stability**: Minimal overfitting across all datasets (Train → Val → Test → OOT)
+- **Production Ready**: OOT RMSE < 0.11 indicates reliable real-world performance
+
+#### Feature Engineering Analysis
+
+![Feature Analysis](docs/figures/feature_analysis.png)
+
+**Feature Distribution:**
+- **Technical Indicators** (21 features): Core price-based signals (RSI, MACD, Bollinger Bands)
+- **Returns** (14 features): Multi-timeframe return calculations (1-360 minutes)
+- **Volatility** (13 features): Advanced estimators (GK, Parkinson, Yang-Zhang, EWMA)
+- **News Signals** (22 features): AI-powered sentiment analysis with FinBERT
+- **Volume Metrics** (7 features): Liquidity and flow indicators
+- **Microstructure** (6 features): Market impact, spread, order flow imbalance
+
+**Key Findings:**
+- 114 total features engineered from raw OHLCV + news data
+- News sentiment features account for ~19% of total feature set
+- Multi-dimensional volatility estimation captures regime changes
+- Microstructure features provide edge in short-term predictions
+
 ---
 
 ## Key Features
