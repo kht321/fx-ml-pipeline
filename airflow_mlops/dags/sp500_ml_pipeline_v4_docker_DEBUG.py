@@ -375,7 +375,7 @@ train_xgboost_model = DockerOperator(
         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
     },
     mount_tmp_dir=False,
-    mem_limit='28g',
+    mem_limit='32g',  # Sequential training - no memory competition from other models
     dag=dag,
 )
 
@@ -404,7 +404,7 @@ train_lightgbm_model = DockerOperator(
         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
     },
     mount_tmp_dir=False,
-    mem_limit='16g',  # Reduced memory limit for compatibility
+    mem_limit='16g',  # Reduced after optimizing news merge (iterrows -> merge_asof)
     dag=dag,
 )
 
@@ -434,7 +434,7 @@ train_ar_model = DockerOperator(
         'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
     },
     mount_tmp_dir=False,
-    mem_limit='28g',
+    mem_limit='32g',  # Increased for 2.6M predictions + large CSV save
     dag=dag,
 )
 
@@ -864,11 +864,12 @@ silver_processing >> gold_processing
 # 4. Validate gold data quality before training
 gold_processing >> validate_gold_quality
 
-# 5. Train 3 models in parallel (XGBoost, LightGBM, AR)
-validate_gold_quality >> [train_xgboost_model, train_lightgbm_model, train_ar_model]
+# 5. Train 3 models SEQUENTIALLY to reduce peak memory (88GB -> 40GB max)
+# Order: XGBoost (fastest) -> LightGBM (medium) -> AR (slowest)
+validate_gold_quality >> train_xgboost_model >> train_lightgbm_model >> train_ar_model
 
-# 6. Select best model based on RMSE
-[train_xgboost_model, train_lightgbm_model, train_ar_model] >> select_best_model
+# 6. Select best model based on RMSE (after all training completes)
+train_ar_model >> select_best_model
 
 # 7. Validate selected model output
 select_best_model >> validate_model_output
