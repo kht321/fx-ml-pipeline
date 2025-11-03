@@ -245,13 +245,6 @@ class ModelInference:
             if task == "regression":
                 relative_change = float(self.model.predict(feature_array)[0])
 
-                # TEMPORARY: Blend with simulated news sentiment for better demo
-                simulated_sentiment = self._get_simulated_news_sentiment()
-                if simulated_sentiment is not None:
-                    # Weight: 10% model, 90% news sentiment (for demo purposes)
-                    news_relative_change = simulated_sentiment * 0.015  # Scale sentiment to ~1.5% max change
-                    relative_change = (relative_change * 0.1) + (news_relative_change * 0.9)
-
                 prediction_label = self._relative_change_to_label(relative_change)
                 probability = None
                 confidence = min(abs(relative_change), 1.0)
@@ -264,13 +257,6 @@ class ModelInference:
                 prediction_class = self.model.predict(feature_array)[0]
 
                 probability = float(prediction_proba[1])  # Probability of bullish
-
-                # TEMPORARY: Blend with simulated news sentiment for better demo
-                simulated_sentiment = self._get_simulated_news_sentiment()
-                if simulated_sentiment is not None:
-                    # Weight: 30% model, 70% news sentiment (for demo purposes)
-                    news_probability = 0.5 + (simulated_sentiment * 0.3)
-                    probability = (probability * 0.3) + (news_probability * 0.7)
 
                 prediction_label = "bullish" if probability > 0.5 else "bearish"
                 confidence = abs(probability - 0.5) * 2.0
