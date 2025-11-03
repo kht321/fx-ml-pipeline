@@ -176,6 +176,7 @@ materialize_to_feast = DockerOperator(
         'python3', '-c',
         """
 import sys
+import subprocess
 from pathlib import Path
 import pandas as pd
 from datetime import datetime, timedelta
@@ -219,17 +220,45 @@ feast_df = recent_df[[
 ]].copy()
 
 # Add entity columns for Feast
-feast_df['entity_id'] = 'SPX500'  # Entity for S&P 500
+feast_df['instrument'] = 'SPX500_USD'  # Entity for S&P 500
 feast_df = feast_df.rename(columns={'signal_time': 'event_timestamp'})
 
-# Save for Feast to pick up
+# Save parquet file for Feast to read
 feast_output = Path('/data_clean/gold/feast/online_features.parquet')
 feast_output.parent.mkdir(parents=True, exist_ok=True)
 feast_df.to_parquet(feast_output, index=False)
 
 print(f'✓ Prepared {len(feast_df)} features for Feast materialization')
 print(f'Saved to: {feast_output}')
-print('NOTE: Feast materialization happens via Feast serve (always running)')
+
+# Actually materialize to Feast online store (Redis)
+try:
+    print('\\n🔄 Materializing features to Feast online store...')
+
+    # Calculate time range for materialization
+    start_time = recent_df['signal_time'].min()
+    end_time = pd.Timestamp.now(tz='UTC')
+
+    # Run feast materialize command
+    cmd = [
+        'feast', '-c', '/feast/feature_repo', 'materialize',
+        start_time.strftime('%Y-%m-%dT%H:%M:%S'),
+        end_time.strftime('%Y-%m-%dT%H:%M:%S')
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+    if result.returncode == 0:
+        print('✅ Successfully materialized features to Feast online store')
+        print(result.stdout)
+    else:
+        print(f'⚠️  Feast materialization warning: {result.stderr}')
+        print('Features saved to parquet file for manual materialization')
+
+except Exception as e:
+    print(f'⚠️  Could not run feast materialize: {e}')
+    print('Features saved to parquet file. Feast serve will pick them up.')
+
 print('FastAPI can now pull these features from Feast online store')
         """
     ],

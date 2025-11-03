@@ -319,14 +319,11 @@ services:
     ports:
       - "8050:8050"
     volumes:
-      - ./data_clean/gold:/data/gold
-      - ./data_clean/models:/models
+      - ./data_clean:/data/clean
       - evidently_reports:/reports
     networks:
       - ml-network
     environment:
-      - REFERENCE_DATA=/data/gold/market/features/spx500_features.csv
-      - CURRENT_DATA=/data/gold/monitoring/current_features.csv
       - DATA_DIR=/data
       - REPORTS_DIR=/reports
 

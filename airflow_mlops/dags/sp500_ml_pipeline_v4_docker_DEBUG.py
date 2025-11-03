@@ -12,6 +12,8 @@ Repository: airflow_mlops/dags/sp500_ml_pipeline_v4_docker.py
 """
 
 from datetime import datetime, timedelta
+from pathlib import Path
+
 from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.utils.task_group import TaskGroup
@@ -21,6 +23,25 @@ from docker.types import Mount
 DOCKER_IMAGE = 'fx-ml-pipeline-worker:latest'
 NETWORK_MODE = 'fx-ml-pipeline_ml-network'
 DOCKER_URL = 'unix://var/run/docker.sock'
+
+# Locate an existing news signals artifact (CSV fallback if Parquet missing)
+NEWS_SIGNAL_CANDIDATES = [
+    Path('/data_clean/gold/news/signals/sp500_trading_signals.parquet'),
+    Path('/data_clean/gold/news/signals/sp500_trading_signals.csv'),
+    Path('/data_clean/gold/news/signals/trading_signals_new.csv'),
+]
+
+
+def resolve_news_signals_path() -> str:
+    """Pick the first available news signal artifact."""
+    for candidate in NEWS_SIGNAL_CANDIDATES:
+        if candidate.exists():
+            return str(candidate)
+    # Default to CSV variant so training scripts still receive a usable path
+    return str(NEWS_SIGNAL_CANDIDATES[1])
+
+
+NEWS_SIGNALS_PATH = resolve_news_signals_path()
 
 # Volume mounts - shared between all tasks
 MOUNTS = [
@@ -298,11 +319,21 @@ if not labels_file.exists():
 df_labels = pd.read_csv(labels_file)
 print(f'✓ Labels file loaded: {len(df_labels):,} rows')
 
-# Check news signals
-news_file = Path('/data_clean/gold/news/signals/sp500_trading_signals.csv')
-if news_file.exists():
-    df_news = pd.read_csv(news_file)
-    print(f'✓ News signals loaded: {len(df_news):,} rows')
+# Check news signals (support CSV or Parquet)
+news_candidates = [
+    Path('/data_clean/gold/news/signals/sp500_trading_signals.parquet'),
+    Path('/data_clean/gold/news/signals/sp500_trading_signals.csv'),
+    Path('/data_clean/gold/news/signals/trading_signals_new.csv'),
+]
+
+news_file = next((path for path in news_candidates if path.exists()), None)
+
+if news_file:
+    if news_file.suffix == '.parquet':
+        df_news = pd.read_parquet(news_file)
+    else:
+        df_news = pd.read_csv(news_file)
+    print(f'✓ News signals loaded from {news_file.name}: {len(df_news):,} rows')
 else:
     print('⚠ News signals file not found (optional)')
 
@@ -330,7 +361,7 @@ train_xgboost_model = DockerOperator(
     command=[
         'python3', '-m', 'src_clean.training.xgboost_training_pipeline_mlflow',
         '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-        '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+        '--news-signals', NEWS_SIGNALS_PATH,
         '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
         '--prediction-horizon', '30',
         '--task', 'regression',
@@ -359,7 +390,7 @@ train_lightgbm_model = DockerOperator(
     command=[
         'python3', '-m', 'src_clean.training.lightgbm_training_pipeline_mlflow',
         '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
-        '--news-signals', '/data_clean/gold/news/signals/sp500_trading_signals.parquet',
+        '--news-signals', NEWS_SIGNALS_PATH,
         '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
         '--prediction-horizon', '30',
         '--task', 'regression',
@@ -388,6 +419,7 @@ train_ar_model = DockerOperator(
     command=[
         'python3', '-m', 'src_clean.training.ar_training_pipeline_mlflow',
         '--market-features', '/data_clean/gold/market/features/spx500_features.csv',
+        '--news-signals', NEWS_SIGNALS_PATH,
         '--labels', '/data_clean/gold/market/labels/spx500_labels_30min.csv',
         '--prediction-horizon', '30',
         '--lag-min', '1',
@@ -442,9 +474,11 @@ for model_type in model_types:
         continue
 
     # Find latest metrics file
-    metrics_files = sorted(model_dir.glob('*_metrics.json'),
-                          key=lambda x: x.stat().st_mtime,
-                          reverse=True)
+    metrics_files = sorted(
+        model_dir.rglob('*_metrics.json'),
+        key=lambda x: x.stat().st_mtime,
+        reverse=True
+    )
 
     if not metrics_files:
         print(f'⚠ No metrics found for {model_type}')
@@ -466,20 +500,21 @@ for model_type in model_types:
         best_model = model_type
         best_metrics = metrics
 
-        # Find model file
-        if model_type == 'arima':
-            model_files = sorted(model_dir.glob('arima_*.pkl'),
-                               key=lambda x: x.stat().st_mtime,
-                               reverse=True)
+        # Find the corresponding model artifact
+        candidate_name = metrics_path.name.replace('_metrics.json', '.pkl')
+        candidate_path = metrics_path.with_name(candidate_name)
+
+        if candidate_path.exists():
+            best_model_path = candidate_path
         else:
-            model_files = sorted(model_dir.glob(f'{model_type}_regression_*.pkl'),
-                               key=lambda x: x.stat().st_mtime,
-                               reverse=True)
+            pkl_candidates = sorted(
+                metrics_path.parent.glob('*.pkl'),
+                key=lambda x: x.stat().st_mtime,
+                reverse=True
+            )
+            best_model_path = pkl_candidates[0] if pkl_candidates else None
 
-        if model_files:
-            best_model_path = model_files[0]
-
-if best_model is None:
+if best_model is None or best_model_path is None:
     print('ERROR: No models found!')
     exit(1)
 
@@ -489,36 +524,32 @@ print(f'\\n✅ BEST MODEL: {best_model.upper()} (RMSE={best_rmse:.4f})')
 production_dir = models_base / 'production'
 production_dir.mkdir(exist_ok=True)
 
-if best_model_path:
-    # Copy model file
-    prod_model_path = production_dir / f'best_model_{best_model}.pkl'
-    shutil.copy2(best_model_path, prod_model_path)
-    print(f'✓ Copied {best_model_path.name} -> {prod_model_path.name}')
+# Copy model file
+prod_model_path = production_dir / f'best_model_{best_model}.pkl'
+shutil.copy2(best_model_path, prod_model_path)
+print(f'✓ Copied {best_model_path.name} -> {prod_model_path.name}')
 
-    # Copy features file
-    features_src = best_model_path.parent / f'{best_model_path.stem}_features.json'
-    if features_src.exists():
-        features_dst = production_dir / f'best_model_{best_model}_features.json'
-        shutil.copy2(features_src, features_dst)
-        print(f'✓ Copied features file')
+# Copy features file
+features_src = best_model_path.with_name(f'{best_model_path.stem}_features.json')
+if features_src.exists():
+    features_dst = production_dir / f'best_model_{best_model}_features.json'
+    shutil.copy2(features_src, features_dst)
+    print(f'✓ Copied features file')
 
-    # Save selection metadata
-    selection_info = {
-        'selected_model': best_model,
-        'test_rmse': best_rmse,
-        'test_mae': best_metrics.get('test_mae', None),
-        'oot_rmse': best_metrics.get('oot_rmse', None),
-        'oot_mae': best_metrics.get('oot_mae', None),
-        'model_path': str(prod_model_path)
-    }
+# Save selection metadata
+selection_info = {
+    'selected_model': best_model,
+    'test_rmse': best_rmse,
+    'test_mae': best_metrics.get('test_mae', None),
+    'oot_rmse': best_metrics.get('oot_rmse', None),
+    'oot_mae': best_metrics.get('oot_mae', None),
+    'model_path': str(prod_model_path)
+}
 
-    with open(production_dir / 'selection_info.json', 'w') as f:
-        json.dump(selection_info, f, indent=2)
+with open(production_dir / 'selection_info.json', 'w') as f:
+    json.dump(selection_info, f, indent=2)
 
-    print('✓ Model selection complete!')
-else:
-    print('ERROR: Could not find model file for best model')
-    exit(1)
+print('✓ Model selection complete!')
         """
     ],
     mounts=MOUNTS,
@@ -691,53 +722,75 @@ deploy_model = DockerOperator(
     command=[
         'python3', '-c',
         """
-from pathlib import Path
-import shutil
-import json
 from datetime import datetime
+from pathlib import Path
+import json
+import shutil
 
 print('=== Model Deployment ===')
 
 models_dir = Path('/models')
-pkl_files = sorted(models_dir.glob('xgboost_regression_*.pkl'), key=lambda x: x.stat().st_mtime, reverse=True)
+production_dir = models_dir / 'production'
+selection_file = production_dir / 'selection_info.json'
 
-if not pkl_files:
-    print('ERROR: No models to deploy')
+if not selection_file.exists():
+    print('ERROR: selection_info.json not found - run model selection first')
     exit(1)
 
-latest_model = pkl_files[0]
-model_base = latest_model.stem
+with open(selection_file) as f:
+    selection = json.load(f)
 
-# Create production directory
-prod_dir = models_dir / 'production'
-prod_dir.mkdir(exist_ok=True)
+best_model_path = Path(selection['model_path'])
+if not best_model_path.exists():
+    # If selection stored relative path, look inside production directory
+    best_model_path = production_dir / Path(selection['model_path']).name
 
-# Copy model files to production
-prod_model = prod_dir / 'current_model.pkl'
-shutil.copy(latest_model, prod_model)
-print(f'✓ Deployed model: {latest_model.name} -> production/current_model.pkl')
+if not best_model_path.exists():
+    print(f'ERROR: Selected model artifact not found: {selection["model_path"]}')
+    exit(1)
 
-# Copy metrics if exists
-metrics_file = models_dir / f'{model_base}_metrics.json'
-if metrics_file.exists():
-    shutil.copy(metrics_file, prod_dir / 'current_metrics.json')
-    print('✓ Deployed metrics')
+production_dir.mkdir(exist_ok=True)
 
-# Copy features if exists
-features_file = models_dir / f'{model_base}_features.json'
-if features_file.exists():
-    shutil.copy(features_file, prod_dir / 'current_features.json')
+# Copy best model to canonical deployment name
+deployed_model = production_dir / 'current_model.pkl'
+shutil.copy2(best_model_path, deployed_model)
+print(f'✓ Deployed model: {best_model_path.name} -> {deployed_model.name}')
+
+# Persist metrics snapshot from selection info
+metrics_output = production_dir / 'current_metrics.json'
+with open(metrics_output, 'w') as f:
+    json.dump(
+        {
+            'selected_model': selection['selected_model'],
+            'test_rmse': selection.get('test_rmse'),
+            'test_mae': selection.get('test_mae'),
+            'oot_rmse': selection.get('oot_rmse'),
+            'oot_mae': selection.get('oot_mae'),
+        },
+        f,
+        indent=2
+    )
+print('✓ Recorded deployment metrics snapshot')
+
+# Copy feature definition if present
+features_src = best_model_path.with_name(f'{best_model_path.stem}_features.json')
+features_dst = production_dir / 'current_features.json'
+if features_src.exists():
+    shutil.copy2(features_src, features_dst)
     print('✓ Deployed feature definitions')
+else:
+    print('⚠ Feature definition file not found - skipping copy')
 
 # Create deployment metadata
 deployment_info = {
-    'model_name': latest_model.name,
+    'model_name': best_model_path.name,
+    'selected_model_type': selection['selected_model'],
     'deployed_at': datetime.utcnow().isoformat(),
-    'model_size_mb': latest_model.stat().st_size / (1024 * 1024),
-    'deployment_path': str(prod_model)
+    'model_size_mb': best_model_path.stat().st_size / (1024 * 1024),
+    'deployment_path': str(deployed_model)
 }
 
-with open(prod_dir / 'deployment_info.json', 'w') as f:
+with open(production_dir / 'deployment_info.json', 'w') as f:
     json.dump(deployment_info, f, indent=2)
 
 print('✓ Model deployed to production successfully!')
