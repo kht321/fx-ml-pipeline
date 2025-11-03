@@ -166,7 +166,7 @@ services:
     networks:
       - ml-network
     command: webserver
-    user: "50000:20"
+    user: "0:0"  # Run as root for Docker socket access
 
   airflow-scheduler:
     image: fx-ml-airflow:2.9.3
@@ -191,7 +191,7 @@ services:
     networks:
       - ml-network
     command: scheduler
-    user: "50000:20"
+    user: "0:0"  # Run as root for Docker socket access
 
   airflow-dag-processor:
     image: fx-ml-airflow:2.9.3
@@ -224,7 +224,9 @@ services:
       - "8000:8000"
     volumes:
       - ./src_clean:/app/src_clean
-      - ./data_clean/models:/app/models
+      - ./models:/app/models
+      - ./data_clean/models:/app/data_clean/models
+      - ./data_clean:/app/data_clean
       - ./feature_repo:/app/feature_repo
     networks:
       - ml-network
@@ -259,6 +261,7 @@ services:
     volumes:
       - ./src_clean:/app/src_clean
       - ./data_clean:/app/data_clean
+      - ./models:/app/models
     networks:
       - ml-network
     depends_on:
