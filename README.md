@@ -35,6 +35,33 @@ This project implements a complete MLOps pipeline for financial market predictio
 - **Automatic Selection**: Best model selected based on test RMSE
 - **ARIMAX Enhancement**: Now includes news features as exogenous variables (previously excluded)
 
+### 2-Stage Optuna Hyperparameter Tuning
+- **Stage 1 - Coarse Search**: 20 trials exploring wide parameter ranges
+  - Learning rate: [0.01, 0.3]
+  - Max depth: [3, 10]
+  - Min child weight: [1, 10]
+  - Subsample: [0.5, 1.0]
+- **Stage 2 - Fine Tuning**: 30 trials refining best parameters from Stage 1
+  - Narrower ranges around optimal values
+  - Higher precision in parameter space
+- **Tree Parzen Estimator (TPE)**: Bayesian optimization for efficient search
+- **Early Stopping**: Prevents overfitting with patience-based halting
+- **Parallel Execution**: Multiple trials can run concurrently
+
+### Robust Data Split Strategy
+- **Hardcoded Split Indices**: Consistent train/val/test/OOT splits across all experiments
+- **OOT Evaluation**: Held-out time period for realistic performance testing
+- **OOT2 Methodology**: Additional 10k-row validation on most recent data
+- **No Data Leakage**: Strict temporal ordering maintained
+- **Reproducible Results**: Same splits used across XGBoost, LightGBM, and ARIMAX
+
+### Online Inference DAG
+- **Real-Time Predictions**: Continuous inference pipeline via Airflow
+- **Scheduled Execution**: Hourly/daily inference runs
+- **Prediction Logging**: All predictions stored with timestamps for monitoring
+- **Model Versioning**: Tracks which model version generated each prediction
+- **Automatic Retries**: Fault-tolerant with configurable retry logic
+
 ### FinBERT Performance Optimization
 - **Batch Processing**: Process 64 articles simultaneously (previously 1 at a time)
 - **20-30x Speedup**: 10-15 minutes instead of 4.5 hours for 25K articles
@@ -61,6 +88,13 @@ This project implements a complete MLOps pipeline for financial market predictio
 - **File Attachments**: Drift reports automatically attached to alerts
 - **Multiple Alert Types**: Drift detection, pipeline failures, status updates
 - **Configurable Recipients**: Environment variable-based configuration
+
+### Automated Data Validation
+- **Pre-Training Checks**: Validates data quality before model training
+- **Schema Validation**: Ensures all required features are present
+- **Missing Value Detection**: Flags columns with excessive missing data
+- **Outlier Detection**: Identifies anomalous values beyond 5 std deviations
+- **Data Freshness**: Alerts on stale data (> 7 days old)
 
 ---
 
@@ -219,17 +253,35 @@ Optimization Results:
 - **LightGBM**: Fast gradient boosting with leaf-wise growth
 - **ARIMAX**: Time series with exogenous variables (news sentiment)
 
+**2-Stage Optuna Hyperparameter Tuning:**
+```python
+# Stage 1: Coarse Search (20 trials)
+- Learning rate: [0.01, 0.3]
+- Max depth: [3, 10]
+- Min child weight: [1, 10]
+- Subsample: [0.5, 1.0]
+- Colsample bytree: [0.5, 1.0]
+
+# Stage 2: Fine Tuning (30 trials)
+- Narrower ranges around Stage 1 best parameters
+- Example: If best lr=0.05, search [0.03, 0.07]
+- Higher precision optimization
+- Early stopping with patience=10
+```
+
 **Selection Criteria:**
 - Primary metric: Test RMSE
 - Fallback metrics: MAE, OOT performance
+- OOT2 validation on most recent 10k rows
 - Automatic deployment of best model to production
 - Complete selection metadata saved (selection_info.json)
 
 **Fair Comparison:**
 - All models trained on identical features
-- Same train/test/OOT splits
+- Hardcoded train/val/test/OOT splits (reproducible)
 - Consistent preprocessing and scaling
 - News signals integrated into all models (including ARIMAX)
+- Temporal ordering strictly maintained (no data leakage)
 
 ### 2. Advanced Feature Engineering (114 Total Features)
 
@@ -398,6 +450,24 @@ python -m src_clean.monitoring.email_alerter \
 
 ### 6. Real-Time Inference System
 
+**Online Inference DAG (Airflow):**
+```python
+# Scheduled Execution
+- Hourly predictions: 09:00 - 17:00 market hours
+- Daily batch inference: Post-market close
+- Automatic model loading from MLflow production stage
+- Prediction logging to JSONL for monitoring
+
+# Workflow
+1. Fetch latest market data from OANDA API
+2. Compute features (technical + microstructure + volatility)
+3. Retrieve news sentiment from Feast feature store
+4. Load production model from MLflow
+5. Generate predictions
+6. Log to data_clean/predictions/prediction_log.jsonl
+7. Alert on prediction anomalies
+```
+
 **FastAPI Backend (port 8000):**
 
 ```python
@@ -426,6 +496,26 @@ WS     /ws/market-stream     # WebSocket streaming
 }
 ```
 
+**Prediction Logging:**
+```python
+# Stored in JSONL format for easy analysis
+{
+  "timestamp": "2025-11-01T19:45:00",
+  "prediction": 5234.56,
+  "actual": 5236.12,  # Added post-facto
+  "model_version": "lightgbm_v4_production",
+  "features": {...},  # Full feature vector
+  "error": 1.56,      # Computed after actual observed
+  "drift_score": 0.03
+}
+
+# Used for:
+- Drift detection (Evidently AI)
+- Model performance tracking
+- Error analysis and debugging
+- A/B testing between model versions
+```
+
 ---
 
 ## Technology Stack
@@ -436,6 +526,7 @@ WS     /ws/market-stream     # WebSocket streaming
 | **XGBoost** | 3.0.5 | Gradient boosting classifier/regressor |
 | **LightGBM** | Latest | Fast gradient boosting alternative |
 | **ARIMAX** | statsmodels | Time series with exogenous variables |
+| **Optuna** | 4.1.0 | Bayesian hyperparameter optimization (TPE) |
 | **FinBERT** | ProsusAI/finbert | Financial sentiment analysis (transformers) |
 | **Scikit-learn** | 1.7.2 | Data preprocessing, CV, metrics |
 | **Pandas** | 2.3.3 | Data manipulation |
@@ -489,6 +580,23 @@ Volume:  25,000-100,000 articles (5-year historical)
 Storage: data_clean/bronze/news/historical_5year/*.json
 ```
 
+**Data Validation (Automated):**
+```python
+# Pre-processing checks run before Silver layer
+✓ Row count: Minimum 100k rows required
+✓ Schema validation: All required columns present
+✓ Missing values: < 5% per column threshold
+✓ Outlier detection: Flag values > 5 std deviations
+✓ Duplicate check: Remove duplicate timestamps
+✓ Data freshness: Alert if latest data > 7 days old
+✓ Type validation: Ensure numeric columns are float/int
+
+# Automated alerts on failures
+- Email notification sent on validation failure
+- Pipeline halted until issues resolved
+- Detailed error report generated
+```
+
 ### Silver Layer (Processed Features)
 
 **Processing Pipeline:**
@@ -503,6 +611,7 @@ Storage: data_clean/bronze/news/historical_5year/*.json
 1. **Market Merge** → `market_gold_builder.py` (30 sec)
 2. **FinBERT Signals** → `news_signal_builder.py` (10-15 min with batch optimization)
 3. **Label Generation** → `label_generator.py` (1 min)
+4. **Gold Validation** → `validate_gold_data_quality.py` (30 sec)
 
 **Optimization Details:**
 - Batch size: 64 articles per inference
@@ -510,6 +619,22 @@ Storage: data_clean/bronze/news/historical_5year/*.json
 - GPU support (automatically detected)
 - Fallback to single processing on errors
 - Progress bars with tqdm
+
+**Data Split Strategy (Hardcoded Indices):**
+```python
+# Reproducible splits for all experiments
+Train:      0 to split_train         (60% of data)
+Validation: split_train to split_val (15% of data)
+Test:       split_val to split_test  (15% of data)
+OOT:        split_test to end        (10% of data)
+OOT2:       Last 10,000 rows         (Most recent data)
+
+# Benefits:
+- Same splits across XGBoost, LightGBM, ARIMAX
+- No data leakage (strict temporal ordering)
+- Fair model comparison
+- Reproducible results across runs
+```
 
 **Total Pipeline Time:** 25-35 minutes for complete run
 
@@ -674,7 +799,9 @@ fx-ml-pipeline/
 │
 ├── airflow_mlops/               # Airflow orchestration
 │   └── dags/
-│       └── sp500_ml_pipeline_v4_docker.py  # Production DAG (17 tasks)
+│       ├── sp500_ml_pipeline_v4_docker.py        # Training DAG (17 tasks)
+│       ├── sp500_ml_pipeline_v4_docker_DEBUG.py  # Debug/testing DAG (16 tasks)
+│       └── online_inference_dag.py               # Real-time inference DAG
 │
 ├── docs/                        # Documentation
 │   ├── QUICKSTART.md            # Quick start guide
