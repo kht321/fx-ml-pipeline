@@ -719,7 +719,7 @@ class AutoregressiveOLSMLflowTrainingPipeline(XGBoostMLflowTrainingPipeline):
             logger.info("News features provided but ignored for autoregressive modelling.")
 
         if self.accelerate_dataset:
-            market_df = market_df.head(10000)
+            market_df = market_df.head(30000)
             logger.info("Dataset accelerated for TESTING ENVIRONMENT: using first 10,000 samples for training.")
         final_model, metrics = self.train_model(market_df)
         feature_names = metrics.get("feature_names", [])
