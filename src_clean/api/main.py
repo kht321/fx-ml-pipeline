@@ -59,11 +59,12 @@ try:
     from pathlib import Path
     from joblib import load
 
-    # Find the newest XGBoost regression model (search multiple locations)
+    # Find the newest regression model (search multiple locations)
     search_patterns = [
         "models/xgboost/xgboost_regression_*.pkl",
         "models/lightgbm/lightgbm_regression_*.pkl",
         "data_clean/models/xgboost_regression_*.pkl",
+        "data_clean/models/lightgbm_regression_*.pkl",
     ]
 
     xgb_models = []
