@@ -72,7 +72,7 @@ docker-compose logs -f airflow-webserver
 **URL:** http://localhost:5001
 
 **Features:**
-- Experiment tracking for XGBoost, LightGBM, ARIMAX
+- Experiment tracking for XGBoost, LightGBM, AR (AutoRegressive OLS)
 - Model comparison and metrics visualization
 - Model registry with versioning
 - Stage promotion (None → Staging → Production)
@@ -154,7 +154,7 @@ curl http://localhost:8000/health
 2. silver_processing (3 parallel tasks: technical, microstructure, volatility) (5-8 min)
 3. gold_processing (3 tasks: market merge, news signals, labels) (15-20 min)
 4. validate_gold_data_quality (30s)
-5. train_models (3 parallel: XGBoost, LightGBM, ARIMAX) (8-10 min)
+5. train_models (3 parallel: XGBoost, LightGBM, AR) (8-10 min)
 6. select_best_model (10s)
 7. deploy_model_to_production (30s)
 ```
@@ -162,7 +162,7 @@ curl http://localhost:8000/health
 ### Step 4: View Training Results in MLflow
 1. Go to http://localhost:5001
 2. Click "Experiments" → "SP500_Training_v4"
-3. Compare metrics across XGBoost, LightGBM, ARIMAX
+3. Compare metrics across XGBoost, LightGBM, AR (AutoRegressive OLS)
 4. View model artifacts (plots, metrics, pickled models)
 
 ### Step 5: Get Prediction via API
@@ -335,7 +335,7 @@ print(f'✓ Market data: {len(df):,} rows')
 ## ✨ Key Features
 
 ### 1. Multi-Model Selection
-- **3 Models Compete:** XGBoost, LightGBM, ARIMAX
+- **3 Models Compete:** XGBoost, LightGBM, AR (AutoRegressive OLS)
 - **Automatic Selection:** Best model by test RMSE
 - **2-Stage Optuna Tuning:** Coarse search → Fine tuning
 - **OOT2 Validation:** 10k most recent rows

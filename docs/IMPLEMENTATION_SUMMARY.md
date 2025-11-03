@@ -20,7 +20,7 @@
    - Reproducible data splits across all experiments
    - OOT2 validation on most recent 10k rows
    - No data leakage with strict temporal ordering
-   - Same splits used for XGBoost, LightGBM, and ARIMAX
+   - Same splits used for XGBoost, LightGBM, and AR (AutoRegressive OLS)
 
 3. **Online Inference DAG**
    - Real-time predictions via Airflow scheduling
@@ -51,7 +51,7 @@ Dear Boss,
 
 I have successfully completed all requested enhancements to the FX ML Pipeline. The system now features:
 
-1. **Multi-model selection** with automatic best-model selection (XGBoost, LightGBM, ARIMAX)
+1. **Multi-model selection** with automatic best-model selection (XGBoost, LightGBM, AR)
 2. **2-Stage Optuna hyperparameter tuning** for optimal model performance
 3. **Online inference DAG** for real-time predictions with logging
 4. **Comprehensive drift detection** with Evidently AI
@@ -71,10 +71,10 @@ All services are running and the pipeline is ready for production use.
 **Problem Solved:** Previously, only a single XGBoost model was trained. There was no way to compare different model types.
 
 **Solution Implemented:**
-- **3 Models Training in Parallel:** XGBoost, LightGBM, and ARIMAX
+- **3 Models Training in Parallel:** XGBoost, LightGBM, and AR (AutoRegressive OLS)
 - **Fair Comparison:** All models now use identical features (market + news)
 - **Automatic Selection:** Best model selected based on test RMSE
-- **ARIMAX Fix:** Fixed ARIMA to include news features (was excluding them at line 192)
+- **AR Model:** Linear autoregressive model using OLS with lagged features and exogenous news variables
 
 **Key Files Modified:**
 - [airflow_mlops/dags/sp500_ml_pipeline_v4_docker.py](airflow_mlops/dags/sp500_ml_pipeline_v4_docker.py)
@@ -86,7 +86,7 @@ All services are running and the pipeline is ready for production use.
 2. Train 3 Models in Parallel:
    - XGBoost: /models/xgboost/
    - LightGBM: /models/lightgbm/
-   - ARIMAX: /models/arima/
+   - AR (AutoRegressive OLS): /models/ar/
 3. Select Best Model by RMSE
 4. Copy to /models/production/
 5. Register to MLflow
@@ -348,7 +348,7 @@ python -m src_clean.monitoring.mlflow_model_manager \
    - Updated to ARIMAX (ARIMA with eXogenous variables)
 
 2. `airflow_mlops/dags/sp500_ml_pipeline_v4_docker.py`
-   - Replaced single training with 3 parallel tasks
+   - Replaced single training with 3 parallel tasks (XGBoost, LightGBM, AR)
    - Added `select_best_model_by_rmse` task
    - Updated validation and registration
    - Increased memory limits (10-12GB for gold)
@@ -358,7 +358,7 @@ python -m src_clean.monitoring.mlflow_model_manager \
 **Before:**
 ```
 Pipeline → Train XGBoost → Register → Deploy
-           (news excluded from ARIMA)
+           (single model only)
 
 Monitoring = File validation only
 MLflow = Basic experiment tracking
@@ -366,8 +366,8 @@ MLflow = Basic experiment tracking
 
 **After:**
 ```
-Pipeline → [Train XGBoost, LightGBM, ARIMAX] → Select Best → Register → Deploy
-           (all models use market + news)
+Pipeline → [Train XGBoost, LightGBM, AR] → Select Best → Register → Deploy
+           (all models use market + news features)
 
 Monitoring = Evidently drift detection + Email alerts
 MLflow = Full lifecycle (Staging → Production) + Versioning + Aliases
@@ -394,10 +394,10 @@ MLflow = Full lifecycle (Staging → Production) + Versioning + Aliases
    - Staging → Production workflow
    - Audit trail for compliance
 
-4. **News Integration Fixed**
-   - ARIMAX now includes news features
-   - All models use market + news
-   - Fair comparison across all models
+4. **AR Model Integrated**
+   - AR (AutoRegressive OLS) now included in comparison
+   - All models use market + news features
+   - Fair comparison across all model types
 
 ### Measurable Benefits
 
@@ -506,7 +506,7 @@ Boss,
 
 The FX ML Pipeline is now production-ready with:
 
-✅ **Multi-model selection** (XGBoost, LightGBM, ARIMAX)
+✅ **Multi-model selection** (XGBoost, LightGBM, AR)
 ✅ **Comprehensive drift detection** (Evidently AI)
 ✅ **Enhanced MLflow** (versioning, staging, promotion)
 ✅ **Email alerting system** (proactive monitoring)

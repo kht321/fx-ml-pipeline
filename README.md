@@ -15,7 +15,7 @@ This project implements a complete MLOps pipeline for financial market predictio
 ### Key Highlights
 
 - **Production Architecture**: Medallion data pipeline (Bronze → Silver → Gold) with complete MLOps stack
-- **Multi-Model Selection**: Automatic comparison of XGBoost, LightGBM, and ARIMAX with RMSE-based selection
+- **Multi-Model Selection**: Automatic comparison of XGBoost, LightGBM, and AR (AutoRegressive OLS) with RMSE-based selection
 - **Advanced Feature Engineering**: 114 features including technical indicators, market microstructure, volatility estimators, and AI-powered news sentiment
 - **Optimized FinBERT Processing**: Batch inference (20-30x speedup) for financial sentiment analysis
 - **Full Automation**: Airflow orchestration with daily retraining, automatic model selection, and deployment
@@ -30,10 +30,10 @@ This project implements a complete MLOps pipeline for financial market predictio
 ## What's New in v4.0
 
 ### Multi-Model Training & Selection Pipeline
-- **3 Models Compete**: XGBoost, LightGBM, and ARIMAX all trained in parallel
+- **3 Models Compete**: XGBoost, LightGBM, and AR (AutoRegressive OLS) all trained in parallel
 - **Fair Comparison**: All models use identical features (market + news signals)
 - **Automatic Selection**: Best model selected based on test RMSE
-- **ARIMAX Enhancement**: Now includes news features as exogenous variables (previously excluded)
+- **AR Model**: AutoRegressive model using OLS with lagged features and exogenous news variables
 
 ### 2-Stage Optuna Hyperparameter Tuning
 - **Stage 1 - Coarse Search**: 20 trials exploring wide parameter ranges
@@ -53,7 +53,7 @@ This project implements a complete MLOps pipeline for financial market predictio
 - **OOT Evaluation**: Held-out time period for realistic performance testing
 - **OOT2 Methodology**: Additional 10k-row validation on most recent data
 - **No Data Leakage**: Strict temporal ordering maintained
-- **Reproducible Results**: Same splits used across XGBoost, LightGBM, and ARIMAX
+- **Reproducible Results**: Same splits used across XGBoost, LightGBM, and AR
 
 ### Online Inference DAG
 - **Real-Time Predictions**: Continuous inference pipeline via Airflow
@@ -131,7 +131,7 @@ docker-compose up -d
 ```
 
 **What you get:**
-- Multi-model training (XGBoost, LightGBM, ARIMAX)
+- Multi-model training (XGBoost, LightGBM, AR)
 - Automatic best model selection
 - Real-time news sentiment analysis
 - Drift detection and monitoring
@@ -157,22 +157,22 @@ docker-compose down
 
 ```
 XGBoost Regression:
-├─ Test RMSE:        0.0234
-├─ Test MAE:         0.0187
-├─ OOT RMSE:         0.0241
+├─ Test RMSE:        0.1755
+├─ Test MAE:         0.0696
+├─ OOT RMSE:         0.1088
 └─ Training Time:    3-4 minutes
 
 LightGBM Regression:
-├─ Test RMSE:        0.0229
-├─ Test MAE:         0.0183
-├─ OOT RMSE:         0.0238
+├─ Test RMSE:        0.1746
+├─ Test MAE:         0.0695
+├─ OOT RMSE:         0.1083
 └─ Training Time:    2-3 minutes
 
-ARIMAX with News:
-├─ Test RMSE:        0.0256
-├─ Test MAE:         0.0198
-├─ OOT RMSE:         0.0267
-└─ Training Time:    5-6 minutes
+AR (AutoRegressive OLS):
+├─ Test RMSE:        ~0.18-0.20
+├─ Test MAE:         ~0.07-0.08
+├─ OOT RMSE:         ~0.11-0.13
+└─ Training Time:    2-3 minutes
 
 Selected Model: LightGBM (lowest test RMSE)
 ```
@@ -251,7 +251,7 @@ Optimization Results:
 **Automatic Model Competition:**
 - **XGBoost**: Gradient boosting with tree-based learning
 - **LightGBM**: Fast gradient boosting with leaf-wise growth
-- **ARIMAX**: Time series with exogenous variables (news sentiment)
+- **AR (AutoRegressive OLS)**: Linear autoregressive model with lagged features and exogenous variables
 
 **2-Stage Optuna Hyperparameter Tuning:**
 ```python
@@ -280,7 +280,7 @@ Optimization Results:
 - All models trained on identical features
 - Hardcoded train/val/test/OOT splits (reproducible)
 - Consistent preprocessing and scaling
-- News signals integrated into all models (including ARIMAX)
+- News signals integrated into all models (including AR)
 - Temporal ordering strictly maintained (no data leakage)
 
 ### 2. Advanced Feature Engineering (114 Total Features)
@@ -525,7 +525,7 @@ WS     /ws/market-stream     # WebSocket streaming
 |-----------|---------|---------|
 | **XGBoost** | 3.0.5 | Gradient boosting classifier/regressor |
 | **LightGBM** | Latest | Fast gradient boosting alternative |
-| **ARIMAX** | statsmodels | Time series with exogenous variables |
+| **AR (statsmodels)** | Latest | AutoRegressive model with OLS |
 | **Optuna** | 4.1.0 | Bayesian hyperparameter optimization (TPE) |
 | **FinBERT** | ProsusAI/finbert | Financial sentiment analysis (transformers) |
 | **Scikit-learn** | 1.7.2 | Data preprocessing, CV, metrics |
@@ -630,7 +630,7 @@ OOT:        split_test to end        (10% of data)
 OOT2:       Last 10,000 rows         (Most recent data)
 
 # Benefits:
-- Same splits across XGBoost, LightGBM, ARIMAX
+- Same splits across XGBoost, LightGBM, AR
 - No data leakage (strict temporal ordering)
 - Fair model comparison
 - Reproducible results across runs
@@ -788,7 +788,7 @@ fx-ml-pipeline/
 │   ├── training/                # Model training
 │   │   ├── xgboost_training_pipeline_mlflow.py
 │   │   ├── lightgbm_training_pipeline_mlflow.py
-│   │   └── arima_training_pipeline_mlflow.py  # ARIMAX with news
+│   │   └── ar_training_pipeline_mlflow.py     # AR with exogenous variables
 │   ├── monitoring/              # Drift detection & alerting
 │   │   ├── evidently_drift_detector.py  # Comprehensive drift detection
 │   │   ├── email_alerter.py             # Email notification system
@@ -821,7 +821,7 @@ fx-ml-pipeline/
 ├── models/                      # Trained models
 │   ├── xgboost/                 # XGBoost models
 │   ├── lightgbm/                # LightGBM models
-│   ├── arima/                   # ARIMAX models
+│   ├── ar/                      # AutoRegressive OLS models
 │   └── production/              # Selected best model
 │       ├── best_model_*.pkl
 │       └── selection_info.json  # Model selection metadata
