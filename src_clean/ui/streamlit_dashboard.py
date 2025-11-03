@@ -52,7 +52,7 @@ MODEL_DIR = Path("data_clean/models")
 GOLD_DIR = Path("data_clean/gold")
 PREDICTIONS_FILE = Path("data_clean/predictions/latest_prediction.json")
 PREDICTIONS_HISTORY_FILE = Path("data_clean/predictions/prediction_history.json")
-NEWS_DIR = Path("data/news/bronze/simulated")
+NEWS_DIR = Path("data_clean/bronze/news/simulated")
 
 # Initialize OANDA API if available
 if OANDA_AVAILABLE and OANDA_TOKEN:
@@ -67,28 +67,45 @@ else:
 
 @st.cache_resource
 def load_latest_model():
-    """Load the most recent trained model."""
+    """Load the most recent trained model (regression or classification)."""
     try:
-        # Find latest model
-        model_files = list(MODEL_DIR.glob("xgboost_classification_*.pkl"))
+        # Find latest model - prefer regression models for price prediction
+        regression_files = list(MODEL_DIR.glob("xgboost_regression_*.pkl"))
+        classification_files = list(MODEL_DIR.glob("xgboost_classification_*.pkl"))
+
+        model_files = regression_files + classification_files
         if not model_files:
             return None, None, None
 
         latest_model_path = max(model_files, key=lambda p: p.stat().st_mtime)
-        model = load(latest_model_path)
 
-        # Load features and metrics
+        # Load model
+        model_bundle = load(latest_model_path)
+        if isinstance(model_bundle, dict):
+            model = model_bundle.get('model')
+            feature_names = model_bundle.get('feature_names', [])
+        else:
+            model = model_bundle
+            feature_names = getattr(model, 'feature_names_in_', [])
+
+        # Try to load metrics if available
         model_name = latest_model_path.stem
-        features_path = MODEL_DIR / f"{model_name}_features.json"
         metrics_path = MODEL_DIR / f"{model_name}_metrics.json"
 
-        with open(features_path) as f:
-            features = json.load(f)['features']
+        metrics = None
+        if metrics_path.exists():
+            with open(metrics_path) as f:
+                metrics = json.load(f)
+        else:
+            # Create placeholder metrics for regression model
+            metrics = {
+                'model_type': 'regression' if 'regression' in model_name else 'classification',
+                'model_name': model_name,
+                'n_features': len(feature_names),
+                'trained_at': latest_model_path.stat().st_mtime
+            }
 
-        with open(metrics_path) as f:
-            metrics = json.load(f)
-
-        return model, features, metrics
+        return model, feature_names, metrics
     except Exception as e:
         st.error(f"Error loading model: {e}")
         return None, None, None
@@ -189,9 +206,24 @@ def load_latest_prediction():
     """Load the latest prediction from FastAPI."""
     try:
         import requests
-        response = requests.post('http://localhost:8000/predict',
-                                json={'instrument': 'SPX500_USD'},
-                                timeout=5)
+        # Try Docker network first, then localhost for local development
+        fastapi_url = os.getenv('FASTAPI_URL', 'http://fastapi:8000')
+        # Fallback to localhost if FASTAPI_URL not set
+        if fastapi_url == 'http://fastapi:8000':
+            try:
+                response = requests.post(f'{fastapi_url}/predict',
+                                        json={'instrument': 'SPX500_USD'},
+                                        timeout=2)
+            except:
+                # Fallback to localhost
+                fastapi_url = 'http://localhost:8000'
+                response = requests.post(f'{fastapi_url}/predict',
+                                        json={'instrument': 'SPX500_USD'},
+                                        timeout=5)
+        else:
+            response = requests.post(f'{fastapi_url}/predict',
+                                    json={'instrument': 'SPX500_USD'},
+                                    timeout=5)
 
         if response.status_code == 200:
             pred_data = response.json()
@@ -343,14 +375,17 @@ def load_recent_news(limit=10):
 def generate_price_forecast(df, prediction_result, forecast_hours=4):
     """Generate price forecast based on ML prediction and recent trend."""
     try:
-        if df is None or df.empty or not prediction_result:
+        if df is None or df.empty:
             return None
 
         current_price = df['close'].iloc[-1]
         recent_volatility = df['close'].pct_change().rolling(20).std().iloc[-1]
 
+        # Default to neutral if no prediction
+        if not prediction_result:
+            expected_move_pct = 0.0
         # Check if we have a predicted price from regression model
-        if 'predicted_price' in prediction_result and prediction_result['predicted_price']:
+        elif 'predicted_price' in prediction_result and prediction_result['predicted_price']:
             # Use actual predicted price from regression model
             target_price = prediction_result['predicted_price']
             expected_move_pct = (target_price - current_price) / current_price
@@ -359,9 +394,13 @@ def generate_price_forecast(df, prediction_result, forecast_hours=4):
             expected_move_pct = prediction_result['predicted_change'] / 100.0
         else:
             # Fallback to classification-based prediction
-            direction = 1 if prediction_result['prediction'].lower() in ['up', 'bullish'] else -1
-            confidence = prediction_result['confidence']
-            expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
+            pred_direction = prediction_result['prediction'].lower()
+            if pred_direction in ['neutral', 'hold']:
+                expected_move_pct = 0.0
+            else:
+                direction = 1 if pred_direction in ['up', 'bullish'] else -1
+                confidence = prediction_result.get('confidence', 0.5)
+                expected_move_pct = direction * confidence * recent_volatility * np.sqrt(forecast_hours)
 
         # Generate forecast points
         forecast_periods = 12  # 12 points for smooth line
@@ -519,35 +558,89 @@ def plot_candlestick(df, forecast_data=None):
 
 def plot_feature_importance(model, feature_names):
     """Plot feature importance from model."""
-    importance_df = pd.DataFrame({
-        'feature': feature_names,
-        'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False).head(20)
+    try:
+        # Get feature importances - handle both dict bundles and direct models
+        if isinstance(model, dict):
+            actual_model = model.get('model', model)
+        else:
+            actual_model = model
 
-    fig = px.bar(
-        importance_df,
-        x='importance',
-        y='feature',
-        orientation='h',
-        title='Top 20 Feature Importance'
-    )
-    fig.update_layout(height=600)
+        # Get feature importances
+        if hasattr(actual_model, 'feature_importances_'):
+            importances = actual_model.feature_importances_
+        else:
+            # If model doesn't have feature_importances_, return None
+            return None
 
-    return fig
+        # Ensure we have matching lengths
+        if len(feature_names) != len(importances):
+            st.warning(f"Feature name count ({len(feature_names)}) doesn't match importance count ({len(importances)})")
+            return None
+
+        # Create DataFrame with explicit conversion to list
+        importance_df = pd.DataFrame({
+            'feature': list(feature_names),
+            'importance': importances.tolist() if hasattr(importances, 'tolist') else list(importances)
+        })
+
+        # Sort and get top 20
+        importance_df = importance_df.sort_values('importance', ascending=False).head(20)
+
+        # Create horizontal bar chart
+        fig = px.bar(
+            importance_df,
+            x='importance',
+            y='feature',
+            orientation='h',
+            title='Top 20 Feature Importance',
+            labels={'importance': 'Importance Score', 'feature': 'Feature'}
+        )
+        fig.update_layout(
+            height=600,
+            yaxis={'categoryorder': 'total ascending'}
+        )
+
+        return fig
+    except Exception as e:
+        st.error(f"Error plotting feature importance: {e}")
+        return None
 
 
 def display_model_metrics(metrics):
-    """Display model performance metrics."""
-    col1, col2, col3, col4 = st.columns(4)
+    """Display model performance metrics (regression or classification)."""
+    model_type = metrics.get('model_type', 'unknown')
 
-    with col1:
-        st.metric("Accuracy", f"{metrics.get('accuracy', 0):.2%}")
-    with col2:
-        st.metric("AUC", f"{metrics.get('auc', 0):.4f}")
-    with col3:
-        st.metric("CV Mean", f"{metrics.get('cv_mean', 0):.4f}")
-    with col4:
-        st.metric("CV Std", f"{metrics.get('cv_std', 0):.4f}")
+    if model_type == 'regression':
+        # Regression metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            rmse = metrics.get('rmse', metrics.get('test_rmse', 0))
+            st.metric("RMSE", f"{rmse:.4f}")
+        with col2:
+            mae = metrics.get('mae', metrics.get('test_mae', 0))
+            st.metric("MAE", f"{mae:.4f}")
+        with col3:
+            r2 = metrics.get('r2', metrics.get('test_r2', 0))
+            st.metric("R² Score", f"{r2:.4f}")
+        with col4:
+            mape = metrics.get('mape', 0)
+            if mape > 0:
+                st.metric("MAPE", f"{mape:.2%}")
+            else:
+                st.metric("Features", metrics.get('n_features', 0))
+    else:
+        # Classification metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Accuracy", f"{metrics.get('accuracy', 0):.2%}")
+        with col2:
+            st.metric("AUC", f"{metrics.get('auc', 0):.4f}")
+        with col3:
+            st.metric("CV Mean", f"{metrics.get('cv_mean', 0):.4f}")
+        with col4:
+            st.metric("CV Std", f"{metrics.get('cv_std', 0):.4f}")
 
 
 def plot_news_sentiment_timeline(news_list):
@@ -698,12 +791,16 @@ def main():
     model, feature_names, metrics = load_latest_model()
 
     if model is None:
-        st.sidebar.error("❌ No model loaded")
-        st.error("No trained model found. Please train a model first.")
-        return
+        st.sidebar.warning("⚠️ No local model file")
+        st.sidebar.info("Using FastAPI model service")
     else:
+        model_type = metrics.get('model_type', 'unknown') if metrics else 'unknown'
+        model_name = metrics.get('model_name', 'N/A') if metrics else 'N/A'
+
         st.sidebar.success("✅ Model loaded")
-        st.sidebar.info(f"Features: {len(feature_names)}")
+        st.sidebar.text(f"Type: {model_type.title()}")
+        st.sidebar.text(f"Features: {len(feature_names)}")
+        st.sidebar.caption(f"Model: {model_name[:30]}...")
 
     # Main content
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -730,15 +827,25 @@ def main():
         # Fetch and display candles
         df = get_candles(instrument, granularity, candle_count)
         if df is not None and not df.empty:
-            # Generate forecast if prediction available
-            forecast_data = None
-            if pred_result:
-                forecast_hours = st.slider("Forecast Horizon (hours)", 1, 12, 4, key='forecast_hours')
-                forecast_data = generate_price_forecast(df, pred_result, forecast_hours)
+            # Generate forecast (even with neutral prediction if no data)
+            forecast_hours = st.slider("Forecast Horizon (hours)", 1, 12, 4, key='forecast_hours')
 
-                if forecast_data:
-                    st.info(f"🔮 **ML Forecast**: Price expected to move **{pred_result['prediction']}** "
-                           f"with **{pred_result['confidence']:.1%}** confidence over next {forecast_hours} hours")
+            # Use prediction if available, otherwise create neutral prediction for forecast
+            if pred_result:
+                forecast_pred = pred_result
+                st.info(f"🔮 **ML Forecast**: Price expected to move **{pred_result['prediction']}** "
+                       f"with **{pred_result['confidence']:.1%}** confidence over next {forecast_hours} hours")
+            else:
+                # Create neutral prediction for visualization
+                forecast_pred = {
+                    'prediction': 'neutral',
+                    'confidence': 0.5,
+                    'predicted_price': None,
+                    'predicted_change': 0.0
+                }
+                st.info(f"🔮 **Neutral Forecast**: Awaiting prediction data. Showing neutral price projection.")
+
+            forecast_data = generate_price_forecast(df, forecast_pred, forecast_hours)
 
             # Plot with forecast
             fig = plot_candlestick(df, forecast_data)
@@ -757,7 +864,7 @@ def main():
             if st.button("🔄 Refresh Now", use_container_width=True):
                 st.rerun()
         with col_auto:
-            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 5 seconds", value=True)
+            auto_refresh_predictions = st.checkbox("🔄 Auto-refresh predictions every 10 seconds", value=False)
 
         st.markdown("---")
 
@@ -877,7 +984,7 @@ def main():
 
         # Auto-refresh logic for predictions tab
         if auto_refresh_predictions:
-            time.sleep(5)
+            time.sleep(10)
             st.rerun()
 
     with tab3:
@@ -972,39 +1079,192 @@ def main():
         st.header("📊 Model Performance Metrics")
 
         if metrics:
+            model_type = metrics.get('model_type', 'unknown')
+
+            # Display basic model info
+            st.info(f"**Model Type:** {model_type.title()} | **Features:** {metrics.get('n_features', 0)}")
+
+            # Display training metrics
+            st.subheader("📈 Training Metrics")
             display_model_metrics(metrics)
 
-            st.markdown("### Confusion Matrix")
-            cm = np.array(metrics.get('confusion_matrix', [[0, 0], [0, 0]]))
-            fig = px.imshow(
-                cm,
-                labels=dict(x="Predicted", y="Actual", color="Count"),
-                x=['DOWN', 'UP'],
-                y=['DOWN', 'UP'],
-                text_auto=True,
-                color_continuous_scale='Blues'
-            )
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("---")
 
-            # Classification report
-            with st.expander("📋 Detailed Classification Report"):
-                st.json(metrics.get('classification_report', {}))
+            # Compute real-time performance from prediction logs
+            st.subheader("🔄 Real-Time Performance (from Prediction Logs)")
+
+            try:
+                from pathlib import Path
+                import json
+
+                pred_log_file = Path("data_clean/predictions/prediction_log.jsonl")
+
+                if pred_log_file.exists() and pred_log_file.stat().st_size > 0:
+                    # Load recent predictions
+                    predictions = []
+                    with open(pred_log_file, 'r') as f:
+                        for line in f:
+                            try:
+                                predictions.append(json.loads(line))
+                            except:
+                                pass
+
+                    if predictions:
+                        # Show statistics from prediction logs
+                        col1, col2, col3, col4 = st.columns(4)
+
+                        with col1:
+                            st.metric("Total Predictions", len(predictions))
+
+                        with col2:
+                            bullish_count = sum(1 for p in predictions if p.get('prediction') == 'bullish')
+                            st.metric("Bullish Predictions", bullish_count)
+
+                        with col3:
+                            bearish_count = sum(1 for p in predictions if p.get('prediction') == 'bearish')
+                            st.metric("Bearish Predictions", bearish_count)
+
+                        with col4:
+                            avg_confidence = np.mean([p.get('confidence', 0) for p in predictions])
+                            st.metric("Avg Confidence", f"{avg_confidence:.2%}")
+
+                        # Plot prediction distribution over time
+                        st.markdown("#### Prediction Timeline")
+
+                        pred_df = pd.DataFrame(predictions)
+                        pred_df['timestamp'] = pd.to_datetime(pred_df['timestamp'])
+
+                        fig = px.scatter(
+                            pred_df,
+                            x='timestamp',
+                            y='predicted_relative_change',
+                            color='prediction',
+                            size='confidence',
+                            hover_data=['predicted_price', 'confidence', 'features_used'],
+                            title="Predicted Price Changes Over Time",
+                            color_discrete_map={'bullish': 'green', 'bearish': 'red'}
+                        )
+                        fig.update_layout(height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Recent predictions table
+                        with st.expander("📋 Recent Predictions"):
+                            recent_preds = pred_df.tail(20)[['timestamp', 'prediction', 'confidence',
+                                                               'predicted_price', 'predicted_relative_change',
+                                                               'features_used']].copy()
+                            recent_preds['predicted_relative_change'] = recent_preds['predicted_relative_change'].apply(lambda x: f"{x*100:.2f}%")
+                            recent_preds['confidence'] = recent_preds['confidence'].apply(lambda x: f"{x:.2%}")
+                            st.dataframe(recent_preds, use_container_width=True)
+                    else:
+                        st.info("No predictions logged yet.")
+                else:
+                    st.info("No prediction log file found. Predictions will be logged as they are made.")
+
+            except Exception as e:
+                st.error(f"Error loading prediction logs: {e}")
+
+            # Show confusion matrix only for classification models
+            if model_type == 'classification' and 'confusion_matrix' in metrics:
+                st.markdown("---")
+                st.subheader("🎯 Confusion Matrix")
+                cm = np.array(metrics.get('confusion_matrix', [[0, 0], [0, 0]]))
+                fig = px.imshow(
+                    cm,
+                    labels=dict(x="Predicted", y="Actual", color="Count"),
+                    x=['DOWN', 'UP'],
+                    y=['DOWN', 'UP'],
+                    text_auto=True,
+                    color_continuous_scale='Blues'
+                )
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Classification report
+                with st.expander("📋 Detailed Classification Report"):
+                    st.json(metrics.get('classification_report', {}))
+
         else:
-            st.warning("No metrics available")
+            st.warning("⚠️ No model metrics available. Model may not have associated metrics file.")
+            st.info("The system is using the trained XGBoost regression model for predictions.")
 
     with tab5:
         st.header("🔍 Feature Analysis")
 
-        if model and feature_names:
-            fig = plot_feature_importance(model, feature_names)
-            st.plotly_chart(fig, use_container_width=True)
+        # Convert feature_names to list first to avoid numpy array boolean ambiguity in conditional
+        if model is not None and feature_names is not None:
+            # Ensure feature_names is a Python list
+            if hasattr(feature_names, 'tolist'):
+                feature_names_list = feature_names.tolist()
+            elif hasattr(feature_names, '__iter__') and not isinstance(feature_names, str):
+                feature_names_list = list(feature_names)
+            else:
+                feature_names_list = feature_names
 
-            # Feature list
-            with st.expander("📋 All Features"):
-                st.write(feature_names)
+            if feature_names_list:
+                st.info(f"**Model has {len(feature_names_list)} features**")
+
+                # Try to plot feature importance
+                fig = plot_feature_importance(model, feature_names_list)
+
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("⚠️ Feature importance plot not available for this model type")
+                    st.info("Feature importance requires a tree-based model (e.g., XGBoost, Random Forest)")
+
+                # Feature list grouped by category
+                st.subheader("📋 Feature Categories")
+
+                feature_categories = {
+                    "OHLCV": ["open", "high", "low", "close", "volume"],
+                    "Returns": ["return_1", "return_5", "return_10"],
+                    "RSI": ["rsi_14", "rsi_20"],
+                    "MACD": ["macd", "macd_signal", "macd_histogram"],
+                    "Bollinger Bands": ["bb_upper", "bb_middle", "bb_lower", "bb_width", "bb_position"],
+                    "Moving Averages": ["sma_7", "sma_14", "sma_21", "sma_50", "ema_7", "ema_14", "ema_21"],
+                    "Volatility": ["atr_14", "adx_14", "volatility_20", "volatility_50", "hist_vol_20", "hist_vol_50"],
+                    "Advanced Volatility": ["gk_vol", "parkinson_vol", "rs_vol", "yz_vol", "vol_of_vol", "ewma_vol"],
+                    "Momentum": ["momentum_5", "momentum_10", "momentum_20", "roc_5", "roc_10"],
+                    "Range Indicators": ["hl_range", "hl_range_pct", "hl_range_ma20", "realized_range", "realized_range_ma"],
+                    "Volume": ["volume_ma20", "volume_ma50", "volume_ratio", "volume_zscore", "volume_velocity", "volume_acceleration"],
+                    "Microstructure": ["price_impact", "price_impact_ma20", "order_flow_imbalance", "illiquidity", "illiquidity_ma20"],
+                    "VWAP": ["vwap", "close_vwap_ratio"],
+                    "Spread": ["spread_proxy", "spread_pct"],
+                    "Volatility Regime": ["vol_regime_low", "vol_regime_high"],
+                    "News Sentiment": [f for f in feature_names_list if 'news' in f.lower()]
+                }
+
+                # Display features by category
+                col1, col2 = st.columns(2)
+                categories_list = list(feature_categories.items())
+                mid = len(categories_list) // 2
+
+                with col1:
+                    for category, features in categories_list[:mid]:
+                        with st.expander(f"{category} ({len([f for f in features if f in feature_names_list])})"):
+                            matching_features = [f for f in features if f in feature_names_list]
+                            if matching_features:
+                                for feat in matching_features:
+                                    st.text(f"• {feat}")
+                            else:
+                                st.caption("No matching features")
+
+                with col2:
+                    for category, features in categories_list[mid:]:
+                        with st.expander(f"{category} ({len([f for f in features if f in feature_names_list])})"):
+                            matching_features = [f for f in features if f in feature_names_list]
+                            if matching_features:
+                                for feat in matching_features:
+                                    st.text(f"• {feat}")
+                            else:
+                                st.caption("No matching features")
+
+                # All features list
+                with st.expander("📋 All Features (Raw List)"):
+                    st.text("\n".join(feature_names_list))
         else:
-            st.warning("No feature data available")
+            st.warning("⚠️ No model or feature data available")
+            st.info("The Feature Analysis tab requires a local model file to display feature importance and details.")
 
     # Footer
     st.markdown("---")
@@ -1016,11 +1276,6 @@ def main():
         """,
         unsafe_allow_html=True
     )
-
-    # Auto-refresh
-    if st.sidebar.checkbox("🔄 Auto-refresh", value=True):
-        time.sleep(refresh_interval)
-        st.rerun()
 
 
 if __name__ == "__main__":

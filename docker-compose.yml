@@ -50,7 +50,7 @@ services:
     working_dir: /mlflow
     command: >
       sh -c "pip install --no-cache-dir mlflow==3.5.0 psycopg2-binary==2.9.10 boto3==1.36.0 &&
-             mlflow server --backend-store-uri postgresql://mlops:mlops_password@postgres:5432/mlops --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000 --allowed-hosts 'ml-mlflow,ml-mlflow:5000,localhost,127.0.0.1,*'"
+             mlflow server --backend-store-uri postgresql://mlops:mlops_password@postgres:5432/mlops --default-artifact-root /mlflow/artifacts --host 0.0.0.0 --port 5000 --allowed-hosts='*'"
     ports:
       - "5001:5000"
     volumes:
@@ -63,6 +63,8 @@ services:
         condition: service_healthy
     environment:
       - MLFLOW_TRACKING_URI=http://localhost:5001
+      - SERVER_NAME=ml-mlflow:5000
+      - PREFERRED_URL_SCHEME=http
 
   # ============================================================================
   # FEAST - Feature Store
@@ -160,9 +162,11 @@ services:
       - ./src_clean:/opt/airflow/src_clean
       - ./data_clean:/opt/airflow/data_clean
       - airflow_logs:/opt/airflow/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - ml-network
     command: webserver
+    user: "0:0"  # Run as root for Docker socket access
 
   airflow-scheduler:
     image: fx-ml-airflow:2.9.3
@@ -187,6 +191,7 @@ services:
     networks:
       - ml-network
     command: scheduler
+    user: "0:0"  # Run as root for Docker socket access
 
   airflow-dag-processor:
     image: fx-ml-airflow:2.9.3
@@ -219,7 +224,9 @@ services:
       - "8000:8000"
     volumes:
       - ./src_clean:/app/src_clean
-      - ./data_clean/models:/app/models
+      - ./models:/app/models
+      - ./data_clean/models:/app/data_clean/models
+      - ./data_clean:/app/data_clean
       - ./feature_repo:/app/feature_repo
     networks:
       - ml-network
@@ -254,6 +261,7 @@ services:
     volumes:
       - ./src_clean:/app/src_clean
       - ./data_clean:/app/data_clean
+      - ./models:/app/models
     networks:
       - ml-network
     depends_on:
@@ -311,14 +319,11 @@ services:
     ports:
       - "8050:8050"
     volumes:
-      - ./data_clean/gold:/data/gold
-      - ./data_clean/models:/models
+      - ./data_clean:/data/clean
       - evidently_reports:/reports
     networks:
       - ml-network
     environment:
-      - REFERENCE_DATA=/data/gold/market/features/spx500_features.csv
-      - CURRENT_DATA=/data/gold/monitoring/current_features.csv
       - DATA_DIR=/data
       - REPORTS_DIR=/reports
 

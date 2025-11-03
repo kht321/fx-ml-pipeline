@@ -1,0 +1,24 @@
+{
+  "selected_lag": 2,
+  "train_rmse_t30": 0.1447681545980726,
+  "train_mae_t30": 0.07393218212355852,
+  "val_rmse_t30": 0.09579048357043829,
+  "val_mae_t30": 0.049061657349192773,
+  "test_rmse_t30": 0.17769480594424772,
+  "test_mae_t30": 0.07088152475189868,
+  "oot_rmse_t30": 0.11238841331823242,
+  "oot_mae_t30": 0.05642474979157126,
+  "model_rsquared": 0.9333984204099295,
+  "model_rsquared_adj": 0.9333983252668545,
+  "mlflow_run_id": "e98da0d17f6f448f95bbca0d171923c7",
+  "feature_names": [
+    "const",
+    "return_30",
+    "return_30_lag1",
+    "return_30_lag2"
+  ],
+  "tuning_results": {},
+  "n_effective_samples": 2625062,
+  "n_features": 4,
+  "horizon_steps": 30
+}

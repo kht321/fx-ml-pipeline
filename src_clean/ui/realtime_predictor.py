@@ -380,7 +380,7 @@ class RealtimePredictor:
 
     def __init__(self,
                  model_dir: Path = Path("data_clean/models"),
-                 news_dir: Path = Path("data/news/bronze/simulated"),
+                 news_dir: Path = Path("data_clean/bronze/news/simulated"),
                  predictions_file: Path = Path("data_clean/predictions/latest_prediction.json"),
                  history_file: Path = Path("data_clean/predictions/prediction_history.json")):
         self.model_dir = model_dir

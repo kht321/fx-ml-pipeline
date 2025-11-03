@@ -54,8 +54,55 @@ app.add_middleware(
 
 # Initialize model inference engine
 try:
+    # Try to use the newest XGBoost regression model first
+    import glob
+    from pathlib import Path
+    from joblib import load
+
+    # Find the newest regression model (search multiple locations)
+    search_patterns = [
+        "models/xgboost/xgboost_regression_*.pkl",
+        "models/lightgbm/lightgbm_regression_*.pkl",
+        "data_clean/models/xgboost_regression_*.pkl",
+        "data_clean/models/lightgbm_regression_*.pkl",
+    ]
+
+    xgb_models = []
+    for pattern in search_patterns:
+        found = glob.glob(pattern, recursive=False)  # Non-recursive to avoid subdirs
+        xgb_models.extend(found)
+
+    # Filter out models with insufficient features by checking quickly
+    valid_models = []
+    for model_path_candidate in xgb_models:
+        try:
+            test_bundle = load(model_path_candidate)
+            if isinstance(test_bundle, dict):
+                test_model = test_bundle.get('model')
+                test_features = test_bundle.get('feature_names', [])
+            else:
+                test_model = test_bundle
+                test_features = getattr(test_model, 'feature_names_in_', [])
+
+            # Only use models with at least 50 features
+            if len(test_features) >= 50:
+                valid_models.append(model_path_candidate)
+                logger.info(f"Found valid model: {model_path_candidate} ({len(test_features)} features)")
+        except Exception as e:
+            logger.warning(f"Could not validate {model_path_candidate}: {e}")
+
+    # Sort by modification time, newest first
+    if valid_models:
+        valid_models = sorted(valid_models, key=lambda x: Path(x).stat().st_mtime, reverse=True)
+        model_path = valid_models[0]
+        logger.info(f"✅ Using best XGBoost regression model: {model_path}")
+    else:
+        # Fallback to known good model
+        model_path = "data_clean/models/xgboost_regression_30min_20251026_030337.pkl"
+        logger.info(f"Using fallback model: {model_path}")
+
     model = ModelInference(
-        model_path="models/gradient_boosting_combined_model.pkl",
+        model_path=model_path,
         feast_repo="feature_repo"
     )
     logger.info("Model inference engine initialized")

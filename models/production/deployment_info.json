@@ -1,0 +1,7 @@
+{
+  "model_name": "best_model_lightgbm.pkl",
+  "selected_model_type": "lightgbm",
+  "deployed_at": "2025-11-03T08:23:33.165091",
+  "model_size_mb": 0.5718402862548828,
+  "deployment_path": "/models/production/current_model.pkl"
+}

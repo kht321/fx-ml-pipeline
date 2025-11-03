@@ -51,19 +51,58 @@ class ModelInference:
         """Load the trained ML model."""
         try:
             from joblib import load
+            import glob
 
             if not self.model_path.exists():
                 logger.warning(f"Model not found at {self.model_path}")
-                # Try alternative paths - PRIORITIZE REGRESSION MODELS for price prediction
-                alternative_paths = [
-                    Path("models/xgboost_regression_30min_20251026_030337.pkl"),
-                    Path("models/lightgbm_regression_30min_20251026_030405.pkl"),
-                    Path("models/xgboost_classification_30min_20251101_042201.pkl"),
+                # Try alternative paths - PRIORITIZE NEWEST REGRESSION MODELS for price prediction
+
+                # First, try to find the newest XGBoost regression model (search multiple locations)
+                search_patterns = [
+                    "models/xgboost/xgboost_regression_*.pkl",
+                    "models/lightgbm/lightgbm_regression_*.pkl",
+                    "data_clean/models/xgboost_regression_*.pkl",
+                ]
+
+                xgb_models = []
+                for pattern in search_patterns:
+                    found = glob.glob(pattern, recursive=False)  # Non-recursive to avoid subdirs
+                    xgb_models.extend(found)
+
+                # Filter out models with insufficient features
+                valid_models = []
+                for model_candidate in xgb_models:
+                    try:
+                        from joblib import load as joblib_load
+                        test_bundle = joblib_load(model_candidate)
+                        if isinstance(test_bundle, dict):
+                            test_features = test_bundle.get('feature_names', [])
+                        else:
+                            test_features = getattr(test_bundle, 'feature_names_in_', [])
+
+                        # Only use models with at least 50 features
+                        if len(test_features) >= 50:
+                            valid_models.append(model_candidate)
+                    except:
+                        pass
+
+                # Sort by modification time, newest first
+                valid_models = sorted(valid_models, key=lambda x: Path(x).stat().st_mtime, reverse=True)
+
+                alternative_paths = []
+                # Add valid models first
+                alternative_paths.extend([Path(p) for p in valid_models[:3]])
+
+                # Then try data_clean/models
+                alternative_paths.extend([
+                    Path("data_clean/models/xgboost_regression_30min_20251026_030337.pkl"),
+                    Path("models/lightgbm/lightgbm_regression_30min_20251026_030405.pkl"),
+                    Path("data_clean/models/xgboost_classification_30min_20251101_042201.pkl"),
                     Path("models/xgboost_combined_model.pkl"),
-                    Path("models/xgboost_classification_enhanced.pkl"),
+                    Path("data_clean/models/xgboost_classification_enhanced.pkl"),
                     Path("models/random_forest_combined_model.pkl"),
                     Path("data/combined/models/gradient_boosting_combined_model.pkl"),
-                ]
+                ])
 
                 for alt_path in alternative_paths:
                     if alt_path.exists():
@@ -179,12 +218,19 @@ class ModelInference:
         """
         timestamp = timestamp or datetime.now()
 
-        # Try to get features from Feast
-        features = self.get_online_features(instrument)
-
-        if not self.is_loaded or not features:
-            # Return mock prediction if model not loaded or no features
+        if not self.is_loaded:
+            # Return mock prediction if model not loaded
             return self._mock_prediction(instrument, timestamp)
+
+        # For full 70-feature model, we need to calculate features on-the-fly
+        # Feast features are supplementary (news sentiment)
+        # Try to get news features from Feast
+        feast_features = self.get_online_features(instrument)
+
+        # Create feature dict with all 70 features
+        # For now, use a simplified approach with mock/default values
+        # In production, you'd fetch real OANDA data and calculate all features
+        features = self._get_full_feature_set(instrument, feast_features)
 
         try:
             # Prepare feature vector
@@ -199,13 +245,6 @@ class ModelInference:
             if task == "regression":
                 relative_change = float(self.model.predict(feature_array)[0])
 
-                # TEMPORARY: Blend with simulated news sentiment for better demo
-                simulated_sentiment = self._get_simulated_news_sentiment()
-                if simulated_sentiment is not None:
-                    # Weight: 10% model, 90% news sentiment (for demo purposes)
-                    news_relative_change = simulated_sentiment * 0.015  # Scale sentiment to ~1.5% max change
-                    relative_change = (relative_change * 0.1) + (news_relative_change * 0.9)
-
                 prediction_label = self._relative_change_to_label(relative_change)
                 probability = None
                 confidence = min(abs(relative_change), 1.0)
@@ -218,13 +257,6 @@ class ModelInference:
                 prediction_class = self.model.predict(feature_array)[0]
 
                 probability = float(prediction_proba[1])  # Probability of bullish
-
-                # TEMPORARY: Blend with simulated news sentiment for better demo
-                simulated_sentiment = self._get_simulated_news_sentiment()
-                if simulated_sentiment is not None:
-                    # Weight: 30% model, 70% news sentiment (for demo purposes)
-                    news_probability = 0.5 + (simulated_sentiment * 0.3)
-                    probability = (probability * 0.3) + (news_probability * 0.7)
 
                 prediction_label = "bullish" if probability > 0.5 else "bearish"
                 confidence = abs(probability - 0.5) * 2.0
@@ -256,6 +288,98 @@ class ModelInference:
             logger.error(f"Prediction error: {e}")
             return self._mock_prediction(instrument, timestamp)
 
+    def _get_full_feature_set(self, instrument: str, feast_features: Optional[Dict]) -> Dict:
+        """Get all 70 features needed for the model.
+
+        For now, this uses realistic defaults for market features and integrates
+        news sentiment from Feast if available.
+
+        In production, this would fetch real OANDA data and calculate all technical indicators.
+
+        Args:
+            instrument: Trading instrument
+            feast_features: Features from Feast (mainly news sentiment)
+
+        Returns:
+            Dictionary with all 70 features
+        """
+        # Start with default values for all features
+        # These are reasonable mid-range values for technical indicators
+        features = {
+            # OHLCV
+            'open': 6500.0, 'high': 6510.0, 'low': 6490.0, 'close': 6500.0, 'volume': 50000.0,
+            # Returns
+            'return_1': 0.0001, 'return_5': 0.0005, 'return_10': 0.001,
+            # RSI
+            'rsi_14': 50.0, 'rsi_20': 50.0,
+            # MACD
+            'macd': 0.5, 'macd_signal': 0.4, 'macd_histogram': 0.1,
+            # Bollinger Bands
+            'bb_upper': 6520.0, 'bb_middle': 6500.0, 'bb_lower': 6480.0,
+            'bb_width': 40.0, 'bb_position': 0.5,
+            # Moving Averages
+            'sma_7': 6500.0, 'sma_14': 6500.0, 'sma_21': 6500.0, 'sma_50': 6500.0,
+            'ema_7': 6500.0, 'ema_14': 6500.0, 'ema_21': 6500.0,
+            # ATR and ADX
+            'atr_14': 15.0, 'adx_14': 25.0,
+            # Momentum
+            'momentum_5': 5.0, 'momentum_10': 10.0, 'momentum_20': 20.0,
+            # Rate of Change
+            'roc_5': 0.1, 'roc_10': 0.2,
+            # Volatility
+            'volatility_20': 0.01, 'volatility_50': 0.012,
+            # Range indicators
+            'hl_range': 20.0, 'hl_range_pct': 0.003, 'hl_range_ma20': 18.0,
+            # Spread
+            'spread_proxy': 20.0, 'spread_pct': 0.003,
+            # Volume features
+            'volume_ma20': 50000.0, 'volume_ma50': 50000.0,
+            'volume_ratio': 1.0, 'volume_zscore': 0.0,
+            # Microstructure
+            'price_impact': 0.00001, 'price_impact_ma20': 0.00001,
+            'order_flow_imbalance': 0.5, 'illiquidity': 0.2, 'illiquidity_ma20': 0.2,
+            # VWAP
+            'vwap': 6500.0, 'close_vwap_ratio': 1.0,
+            # Volume dynamics
+            'volume_velocity': 0.0, 'volume_acceleration': 0.0,
+            # Historical volatility
+            'hist_vol_20': 0.15, 'hist_vol_50': 0.15,
+            # Advanced volatility
+            'gk_vol': 0.15, 'parkinson_vol': 0.14, 'rs_vol': 0.15, 'yz_vol': 0.15,
+            # Volatility regime
+            'vol_of_vol': 0.02, 'vol_regime_low': 0, 'vol_regime_high': 0,
+            # Realized range
+            'realized_range': 0.003, 'realized_range_ma': 0.003, 'ewma_vol': 0.01,
+            # News features (will be updated from Feast or simulated news)
+            'news_avg_sentiment': 0.0,
+            'news_signal_strength': 0.0,
+            'news_article_count': 0,
+            'news_quality_score': 0.0,
+            'news_age_minutes': 60.0,
+            'news_available': 0
+        }
+
+        # Update news features from Feast if available
+        if feast_features:
+            for key, value in feast_features.items():
+                if key in features:
+                    if isinstance(value, list) and len(value) > 0:
+                        features[key] = float(value[0]) if value[0] is not None else features[key]
+                    elif value is not None:
+                        features[key] = float(value)
+
+        # Also get simulated news sentiment
+        simulated_sentiment = self._get_simulated_news_sentiment()
+        if simulated_sentiment is not None:
+            features['news_avg_sentiment'] = simulated_sentiment
+            features['news_signal_strength'] = abs(simulated_sentiment)
+            features['news_article_count'] = 1
+            features['news_quality_score'] = 0.8
+            features['news_age_minutes'] = 5.0
+            features['news_available'] = 1
+
+        return features
+
     def _prepare_features(self, features: Dict) -> List[float]:
         """Prepare feature vector from Feast features.
 
@@ -265,14 +389,9 @@ class ModelInference:
         Returns:
             Feature vector matching model expectations
         """
-        # This is a simplified version - in production, you'd need to:
-        # 1. Extract all features in the correct order
-        # 2. Handle missing values
-        # 3. Apply same transformations as training
-
         feature_vector = []
 
-        # For now, use available features
+        # Extract features in the order expected by the model
         for feature_name in self.feature_names:
             value = features.get(feature_name, 0.0)
             if isinstance(value, list) and len(value) > 0:
@@ -459,32 +578,48 @@ class ModelInference:
         return None
 
     def _get_simulated_news_sentiment(self) -> Optional[float]:
-        """Get average sentiment from simulated news files."""
+        """Get weighted average sentiment from simulated news files.
+
+        Uses exponential decay weighting where recent news has more impact.
+        Weight formula: w_i = exp(-alpha * i) where i is the index (0 = most recent)
+        Alpha = 0.5 gives: [1.0, 0.61, 0.37, 0.22, 0.14] for 5 articles
+        """
         simulated_news_dir = Path("data_clean/bronze/news/simulated")
         if not simulated_news_dir.exists():
             return None
 
         try:
             import json
+            import math
+
+            # Get most recent 5 news files
             news_files = sorted(simulated_news_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)[:5]
 
             if not news_files:
                 return None
 
-            total_sentiment = 0.0
-            count = 0
-            for news_file in news_files:
+            # Exponential decay parameter (higher = more weight on recent news)
+            alpha = 0.5
+
+            weighted_sentiment = 0.0
+            total_weight = 0.0
+
+            for i, news_file in enumerate(news_files):
                 try:
                     with open(news_file, 'r') as f:
                         article = json.load(f)
                         sentiment = article.get('sentiment_score', 0.0)
-                        total_sentiment += sentiment
-                        count += 1
+
+                        # Calculate exponential decay weight
+                        weight = math.exp(-alpha * i)
+
+                        weighted_sentiment += sentiment * weight
+                        total_weight += weight
                 except:
                     pass
 
-            if count > 0:
-                return total_sentiment / count
+            if total_weight > 0:
+                return weighted_sentiment / total_weight
         except:
             pass
 

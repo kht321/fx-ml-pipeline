@@ -163,12 +163,17 @@ class ARIMAMLflowTrainingPipeline:
         # Load news signals if available (support both CSV and Parquet)
         news_df = None
         if self.news_signals_path and self.news_signals_path.exists():
-            if str(self.news_signals_path).endswith('.parquet'):
-                news_df = pd.read_parquet(self.news_signals_path)
-            else:
-                news_df = pd.read_csv(self.news_signals_path)
-            news_df['signal_time'] = pd.to_datetime(news_df['signal_time'])
-            logger.info(f"Loaded news signals: {len(news_df)} rows, {len(news_df.columns)} columns")
+            try:
+                if str(self.news_signals_path).endswith('.parquet'):
+                    news_df = pd.read_parquet(self.news_signals_path)
+                else:
+                    news_df = pd.read_csv(self.news_signals_path)
+                news_df['signal_time'] = pd.to_datetime(news_df['signal_time'])
+                logger.info(f"Loaded news signals: {len(news_df)} rows, {len(news_df.columns)} columns")
+            except Exception as e:
+                logger.warning(f"Failed to load news signals from {self.news_signals_path}: {e}")
+                logger.warning("Continuing with market features only")
+                news_df = None
         else:
             logger.warning("No news signals provided - using market features only")
 
