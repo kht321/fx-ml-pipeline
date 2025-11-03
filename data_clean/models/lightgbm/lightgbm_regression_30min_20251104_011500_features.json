@@ -1,0 +1,15 @@
+{
+  "features": [
+    "rs_vol",
+    "volume_ma50",
+    "yz_vol",
+    "gk_vol",
+    "volatility_50",
+    "return_90",
+    "hist_vol_50",
+    "volatility_20",
+    "news_signal_strength",
+    "volume",
+    "realized_range_ma"
+  ]
+}
