@@ -37,7 +37,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
+import os
+print("Current Directory:", os.getcwd())
+print("Files in Current Directory:", os.listdir(os.getcwd()))
 class LabelGenerator:
     """Generates prediction labels for supervised learning."""
 

@@ -1,9 +1,0 @@
-{
-  "features": [
-    "const",
-    "return_30",
-    "return_30_lag1",
-    "return_30_lag2"
-  ],
-  "selected_lag": 2
-}

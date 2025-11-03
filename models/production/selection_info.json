@@ -1,9 +1,0 @@
-{
-  "selected_model": "lightgbm",
-  "selected_model_name": "lightgbm_regression_30min_20251102_150846.pkl",
-  "test_rmse": 0.09174286660543393,
-  "test_mae": 0.05001173904313,
-  "oot_rmse": 0.082637401598278,
-  "oot_mae": 0.043690138018641196,
-  "model_path": "/models/production/best_model_lightgbm.pkl"
-}

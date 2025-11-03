@@ -1,6 +1,0 @@
-{
-  "model_name": "best_model_lightgbm.pkl",
-  "deployed_at": "2025-11-02T15:16:03.562113",
-  "model_size_mb": 0.5620222091674805,
-  "deployment_path": "/models/production/current_model.pkl"
-}
