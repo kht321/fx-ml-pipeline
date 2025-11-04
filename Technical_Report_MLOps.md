@@ -203,12 +203,13 @@ fastapi:
 - Runtime: 5-10 minutes
 
 **Gold Layer** (ML-Ready)
-- Combined feature matrix: 76 features
+- Combined feature matrix: 76 market features
+- News signals: 11 FinBERT features (optional)
 - Target variable: 30-minute forward returns
 - Quality validated
 - Runtime: 2-3 minutes
 
-### 3.2 Feature Engineering (76 Features)
+### 3.2 Feature Engineering (76 Market Features + 11 News Features)
 
 **Evidence:** `data_clean/models/xgboost/sp500_xgboost_v4_20251103_165857/xgboost_regression_30min_20251103_170115_features.json`
 
@@ -250,6 +251,27 @@ fastapi:
 - illiquidity, illiquidity_ma20
 - vwap, close_vwap_ratio
 - volume_velocity, volume_acceleration
+
+#### News Signals (11 FinBERT Features - Optional)
+**Source:** `src_clean/data_pipelines/gold/news_signal_builder.py`
+**Model:** ProsusAI/finbert (financial sentiment transformer)
+
+**Aggregated Signals (per 60-minute window):**
+- `signal_time` - Window timestamp
+- `avg_sentiment` - Mean sentiment score (-1 to +1)
+- `quality_score` - Mean model confidence
+- `article_count` - Number of articles in window
+- `signal_strength` - |sentiment| × confidence
+- `trading_signal` - Buy (1) / Sell (-1) / Hold (0)
+- `positive_prob`, `negative_prob`, `neutral_prob` - Class probabilities
+- `latest_headline`, `latest_source` - Most recent article metadata
+
+**Processing:**
+- Batch size: 64 articles (20-30x speedup)
+- Runtime: 10-15 minutes for 25K-100K articles
+- GPU acceleration: Automatic detection
+
+**Note:** News features computed but not included in current production models (market features only: 76 features)
 
 ### 3.3 Feature Store (Feast)
 
@@ -660,7 +682,7 @@ features = store.get_online_features(
 | Total Containers | 21 defined, 16 running |
 | Active DAGs | 4 pipelines |
 | API Endpoints | 11 REST + WebSocket |
-| Features Engineered | 76 features |
+| Features Engineered | 76 market + 11 news (87 total) |
 | Model Versions Tracked | 58+ in MLflow |
 | Pipeline Runtime | 25-35 minutes (full) |
 
