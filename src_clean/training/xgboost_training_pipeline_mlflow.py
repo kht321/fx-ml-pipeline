@@ -443,9 +443,11 @@ class XGBoostMLflowTrainingPipeline:
         """
 
         n = len(X_sorted)
-        train_end = np.where(time_sorted==pd.to_datetime('2023-10-12 16:03:00+00:00'))[0][0]  #int(n * train_ratio)
-        val_end = np.where(time_sorted==pd.to_datetime('2024-10-11 06:16:00+00:00'))[0][0]  #int(n * (train_ratio + val_ratio))
-        test_end = np.where(time_sorted==pd.to_datetime('2025-04-11 13:22:00+00:00'))[0][0]  #int(n * (train_ratio + val_ratio + test_ratio))
+        # Use percentage-based splits instead of hard-coded timestamps
+        # This ensures compatibility with different dataset sizes (713K vs 2.6M rows)
+        train_end = int(n * train_ratio)
+        val_end = int(n * (train_ratio + val_ratio))
+        test_end = int(n * (train_ratio + val_ratio + test_ratio))
 
         splits = {
             'train_idx': X_sorted.index[:train_end],

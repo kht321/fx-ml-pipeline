@@ -48,7 +48,8 @@ except ImportError:
 OANDA_ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID")
 OANDA_TOKEN = os.getenv("OANDA_TOKEN")
 OANDA_ENV = os.getenv("OANDA_ENV", "practice")
-MODEL_DIR = Path("data_clean/models")
+MODEL_DIR = Path("models/production")  # Fixed: Use production models directory
+MODEL_DIR_FALLBACK = [Path("models/lightgbm"), Path("models/xgboost"), Path("data_clean/models")]
 GOLD_DIR = Path("data_clean/gold")
 PREDICTIONS_FILE = Path("data_clean/predictions/latest_prediction.json")
 PREDICTIONS_HISTORY_FILE = Path("data_clean/predictions/prediction_history.json")
@@ -69,15 +70,28 @@ else:
 def load_latest_model():
     """Load the most recent trained model (regression or classification)."""
     try:
-        # Find latest model - prefer regression models for price prediction
-        regression_files = list(MODEL_DIR.glob("xgboost_regression_*.pkl"))
-        classification_files = list(MODEL_DIR.glob("xgboost_classification_*.pkl"))
+        # Search for models in multiple directories
+        all_model_dirs = [MODEL_DIR] + MODEL_DIR_FALLBACK
+        all_model_files = []
 
-        model_files = regression_files + classification_files
-        if not model_files:
+        for search_dir in all_model_dirs:
+            if search_dir.exists():
+                regression_files = list(search_dir.glob("*_regression_*.pkl"))
+                classification_files = list(search_dir.glob("*_classification_*.pkl"))
+                # Also check for production models with "best_model" prefix
+                production_files = list(search_dir.glob("best_model_*.pkl"))
+                all_model_files.extend(regression_files + classification_files + production_files)
+
+        if not all_model_files:
             return None, None, None
 
-        latest_model_path = max(model_files, key=lambda p: p.stat().st_mtime)
+        # Prioritize production models, then by modification time
+        def model_priority(path):
+            is_production = 'production' in str(path) or 'best_model' in path.name
+            mtime = path.stat().st_mtime
+            return (is_production, mtime)
+
+        latest_model_path = max(all_model_files, key=model_priority)
 
         # Load model
         model_bundle = load(latest_model_path)
@@ -86,18 +100,49 @@ def load_latest_model():
             feature_names = model_bundle.get('feature_names', [])
         else:
             model = model_bundle
-            feature_names = getattr(model, 'feature_names_in_', [])
+            # Try multiple ways to get feature names (LightGBM vs XGBoost)
+            feature_names = (
+                getattr(model, 'feature_names_in_', None) or
+                getattr(model, 'feature_name_', None) or
+                []
+            )
+            # Convert to list if needed
+            if hasattr(feature_names, 'tolist'):
+                feature_names = feature_names.tolist()
+            elif not isinstance(feature_names, list):
+                feature_names = list(feature_names) if feature_names else []
 
-        # Try to load metrics if available
+        # Try to load metrics from multiple locations
         model_name = latest_model_path.stem
-        metrics_path = MODEL_DIR / f"{model_name}_metrics.json"
+        model_dir = latest_model_path.parent
+
+        # Check for metrics in same directory as model
+        metrics_path = model_dir / f"{model_name}_metrics.json"
+
+        # Also check for production metrics
+        production_metrics = Path("models/production/current_metrics.json")
+        selection_info = Path("models/production/selection_info.json")
 
         metrics = None
-        if metrics_path.exists():
+
+        # Priority: selection_info.json > current_metrics.json > model_metrics.json
+        if selection_info.exists():
+            with open(selection_info) as f:
+                metrics = json.load(f)
+                metrics['model_type'] = 'regression'  # Production models are regression
+                metrics['n_features'] = len(feature_names)
+                metrics['model_name'] = model_name
+        elif production_metrics.exists():
+            with open(production_metrics) as f:
+                metrics = json.load(f)
+                metrics['model_type'] = 'regression'
+                metrics['n_features'] = len(feature_names)
+                metrics['model_name'] = model_name
+        elif metrics_path.exists():
             with open(metrics_path) as f:
                 metrics = json.load(f)
         else:
-            # Create placeholder metrics for regression model
+            # Create placeholder metrics
             metrics = {
                 'model_type': 'regression' if 'regression' in model_name else 'classification',
                 'model_name': model_name,
@@ -611,24 +656,40 @@ def display_model_metrics(metrics):
     model_type = metrics.get('model_type', 'unknown')
 
     if model_type == 'regression':
-        # Regression metrics
+        # Regression metrics - show both test and OOT performance
+        st.markdown("#### Test Set Performance")
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            rmse = metrics.get('rmse', metrics.get('test_rmse', 0))
-            st.metric("RMSE", f"{rmse:.4f}")
+            test_rmse = metrics.get('test_rmse', metrics.get('rmse', 0))
+            st.metric("Test RMSE", f"{test_rmse:.4f}")
         with col2:
-            mae = metrics.get('mae', metrics.get('test_mae', 0))
-            st.metric("MAE", f"{mae:.4f}")
+            test_mae = metrics.get('test_mae', metrics.get('mae', 0))
+            st.metric("Test MAE", f"{test_mae:.4f}")
         with col3:
-            r2 = metrics.get('r2', metrics.get('test_r2', 0))
-            st.metric("R² Score", f"{r2:.4f}")
+            test_r2 = metrics.get('test_r2', metrics.get('r2', 0))
+            st.metric("Test R²", f"{test_r2:.4f}")
         with col4:
-            mape = metrics.get('mape', 0)
-            if mape > 0:
-                st.metric("MAPE", f"{mape:.2%}")
-            else:
-                st.metric("Features", metrics.get('n_features', 0))
+            n_features = metrics.get('n_features', 0)
+            st.metric("Features", n_features)
+
+        # OOT performance if available
+        if 'oot_rmse' in metrics or 'oot_mae' in metrics:
+            st.markdown("#### Out-of-Time (OOT) Performance")
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                oot_rmse = metrics.get('oot_rmse', 0)
+                st.metric("OOT RMSE", f"{oot_rmse:.4f}")
+            with col2:
+                oot_mae = metrics.get('oot_mae', 0)
+                st.metric("OOT MAE", f"{oot_mae:.4f}")
+            with col3:
+                oot_r2 = metrics.get('oot_r2', 0)
+                st.metric("OOT R²", f"{oot_r2:.4f}")
+            with col4:
+                selected_model = metrics.get('selected_model', 'N/A')
+                st.metric("Model", selected_model.upper())
     else:
         # Classification metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -777,7 +838,7 @@ def main():
     )
 
     st.title("🚀 S&P 500 ML Prediction Dashboard")
-    st.markdown("Real-time price prediction using XGBoost and technical features")
+    st.markdown("Real-time price prediction using LightGBM regression and technical features")
 
     # Sidebar
     st.sidebar.header("⚙️ Settings")
@@ -1271,7 +1332,7 @@ def main():
     st.markdown(
         """
         <div style='text-align: center'>
-            <p>Built with ❤️ using Streamlit | Data from OANDA | ML Model: XGBoost</p>
+            <p>Built with ❤️ using Streamlit | Data from OANDA | ML Model: LightGBM</p>
         </div>
         """,
         unsafe_allow_html=True

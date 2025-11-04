@@ -123,12 +123,35 @@ class ModelInference:
                     if not self.prediction_task:
                         self.prediction_task = bundle_task or self._infer_task_from_model()
                 else:
-                    # Raw model object (e.g., LGBMClassifier, XGBClassifier)
+                    # Raw model object (e.g., LGBMClassifier, XGBClassifier, LGBMRegressor)
                     self.model = model_bundle
                     self.scaler = None
-                    feature_names_raw = getattr(model_bundle, 'feature_names_in_', [])
-                    # Convert numpy array to list if needed
-                    self.feature_names = list(feature_names_raw) if hasattr(feature_names_raw, '__iter__') else []
+
+                    # Try multiple ways to get feature names (LightGBM vs XGBoost)
+                    feature_names_raw = None
+                    if hasattr(model_bundle, 'feature_names_in_'):
+                        feature_names_raw = model_bundle.feature_names_in_
+                    elif hasattr(model_bundle, 'feature_name_'):
+                        # LightGBM uses feature_name_ (list, not callable)
+                        feature_names_raw = model_bundle.feature_name_
+                    elif hasattr(model_bundle, 'get_booster'):
+                        # XGBoost booster access
+                        try:
+                            feature_names_raw = model_bundle.get_booster().feature_names
+                        except:
+                            pass
+
+                    # Convert to list
+                    if feature_names_raw is not None:
+                        if hasattr(feature_names_raw, 'tolist'):
+                            self.feature_names = feature_names_raw.tolist()
+                        elif hasattr(feature_names_raw, '__iter__') and not isinstance(feature_names_raw, str):
+                            self.feature_names = list(feature_names_raw)
+                        else:
+                            self.feature_names = []
+                    else:
+                        self.feature_names = []
+
                     self.model_type = type(model_bundle).__name__
                     if not self.prediction_task:
                         self.prediction_task = self._infer_task_from_model()
@@ -304,52 +327,52 @@ class ModelInference:
             Dictionary with all 70 features
         """
         # Start with default values for all features
-        # These are reasonable mid-range values for technical indicators
+        # Adjusted for NEUTRAL baseline for demo (minimal directional bias)
         features = {
-            # OHLCV
-            'open': 6500.0, 'high': 6510.0, 'low': 6490.0, 'close': 6500.0, 'volume': 50000.0,
-            # Returns
-            'return_1': 0.0001, 'return_5': 0.0005, 'return_10': 0.001,
-            # RSI
+            # OHLCV - perfectly neutral candle
+            'open': 6500.0, 'high': 6508.0, 'low': 6492.0, 'close': 6500.0, 'volume': 50000.0,
+            # Returns - zero (neutral)
+            'return_1': 0.0, 'return_5': 0.0, 'return_10': 0.0,
+            # RSI - exactly neutral (50)
             'rsi_14': 50.0, 'rsi_20': 50.0,
-            # MACD
-            'macd': 0.5, 'macd_signal': 0.4, 'macd_histogram': 0.1,
-            # Bollinger Bands
+            # MACD - perfectly neutral (no crossover)
+            'macd': 0.0, 'macd_signal': 0.0, 'macd_histogram': 0.0,
+            # Bollinger Bands - price in middle
             'bb_upper': 6520.0, 'bb_middle': 6500.0, 'bb_lower': 6480.0,
             'bb_width': 40.0, 'bb_position': 0.5,
-            # Moving Averages
+            # Moving Averages - all aligned (neutral)
             'sma_7': 6500.0, 'sma_14': 6500.0, 'sma_21': 6500.0, 'sma_50': 6500.0,
             'ema_7': 6500.0, 'ema_14': 6500.0, 'ema_21': 6500.0,
-            # ATR and ADX
-            'atr_14': 15.0, 'adx_14': 25.0,
-            # Momentum
-            'momentum_5': 5.0, 'momentum_10': 10.0, 'momentum_20': 20.0,
-            # Rate of Change
-            'roc_5': 0.1, 'roc_10': 0.2,
-            # Volatility
-            'volatility_20': 0.01, 'volatility_50': 0.012,
+            # ATR and ADX - low trend strength
+            'atr_14': 10.0, 'adx_14': 20.0,
+            # Momentum - neutral
+            'momentum_5': 0.0, 'momentum_10': 0.0, 'momentum_20': 0.0,
+            # Rate of Change - neutral
+            'roc_5': 0.0, 'roc_10': 0.0,
+            # Volatility - moderate
+            'volatility_20': 0.01, 'volatility_50': 0.01,
             # Range indicators
-            'hl_range': 20.0, 'hl_range_pct': 0.003, 'hl_range_ma20': 18.0,
+            'hl_range': 16.0, 'hl_range_pct': 0.0025, 'hl_range_ma20': 16.0,
             # Spread
-            'spread_proxy': 20.0, 'spread_pct': 0.003,
-            # Volume features
+            'spread_proxy': 8.0, 'spread_pct': 0.0012,
+            # Volume features - average
             'volume_ma20': 50000.0, 'volume_ma50': 50000.0,
             'volume_ratio': 1.0, 'volume_zscore': 0.0,
-            # Microstructure
+            # Microstructure - neutral
             'price_impact': 0.00001, 'price_impact_ma20': 0.00001,
-            'order_flow_imbalance': 0.5, 'illiquidity': 0.2, 'illiquidity_ma20': 0.2,
-            # VWAP
+            'order_flow_imbalance': 0.5, 'illiquidity': 0.15, 'illiquidity_ma20': 0.15,
+            # VWAP - price exactly at VWAP
             'vwap': 6500.0, 'close_vwap_ratio': 1.0,
-            # Volume dynamics
+            # Volume dynamics - no change
             'volume_velocity': 0.0, 'volume_acceleration': 0.0,
-            # Historical volatility
-            'hist_vol_20': 0.15, 'hist_vol_50': 0.15,
-            # Advanced volatility
-            'gk_vol': 0.15, 'parkinson_vol': 0.14, 'rs_vol': 0.15, 'yz_vol': 0.15,
-            # Volatility regime
-            'vol_of_vol': 0.02, 'vol_regime_low': 0, 'vol_regime_high': 0,
+            # Historical volatility - moderate
+            'hist_vol_20': 0.10, 'hist_vol_50': 0.10,
+            # Advanced volatility - moderate
+            'gk_vol': 0.10, 'parkinson_vol': 0.10, 'rs_vol': 0.10, 'yz_vol': 0.10,
+            # Volatility regime - neutral
+            'vol_of_vol': 0.01, 'vol_regime_low': 0, 'vol_regime_high': 0,
             # Realized range
-            'realized_range': 0.003, 'realized_range_ma': 0.003, 'ewma_vol': 0.01,
+            'realized_range': 0.0025, 'realized_range_ma': 0.0025, 'ewma_vol': 0.01,
             # News features (will be updated from Feast or simulated news)
             'news_avg_sentiment': 0.0,
             'news_signal_strength': 0.0,

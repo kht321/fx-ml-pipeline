@@ -54,27 +54,30 @@ app.add_middleware(
 
 # Initialize model inference engine
 try:
-    # Try to use the newest XGBoost regression model first
+    # Use the production LightGBM regression model (best model from training)
     import glob
     from pathlib import Path
     from joblib import load
 
-    # Find the newest regression model (search multiple locations)
+    # Priority order for model loading:
+    # 1. Production LightGBM (from model selection pipeline)
+    # 2. Latest LightGBM regression model
+    # 3. Latest XGBoost regression model (fallback)
     search_patterns = [
-        "models/xgboost/xgboost_regression_*.pkl",
-        "models/lightgbm/lightgbm_regression_*.pkl",
-        "data_clean/models/xgboost_regression_*.pkl",
-        "data_clean/models/lightgbm_regression_*.pkl",
+        "data_clean/models/lightgbm_regression_*_production.pkl",  # Production model (highest priority)
+        "models/production/best_model_lightgbm.pkl",               # Alternative production location
+        "data_clean/models/lightgbm_regression_*.pkl",             # Latest LightGBM
+        "models/lightgbm/lightgbm_regression_*.pkl",               # LightGBM training output
     ]
 
-    xgb_models = []
+    found_models = []
     for pattern in search_patterns:
-        found = glob.glob(pattern, recursive=False)  # Non-recursive to avoid subdirs
-        xgb_models.extend(found)
+        found = glob.glob(pattern, recursive=False)
+        found_models.extend(found)
 
-    # Filter out models with insufficient features by checking quickly
+    # Filter and validate models
     valid_models = []
-    for model_path_candidate in xgb_models:
+    for model_path_candidate in found_models:
         try:
             test_bundle = load(model_path_candidate)
             if isinstance(test_bundle, dict):
@@ -82,30 +85,52 @@ try:
                 test_features = test_bundle.get('feature_names', [])
             else:
                 test_model = test_bundle
-                test_features = getattr(test_model, 'feature_names_in_', [])
+                # Try multiple ways to get feature names
+                test_features = (
+                    getattr(test_model, 'feature_names_in_', None) or
+                    getattr(test_model, 'feature_name_', None) or
+                    []
+                )
+                # Convert numpy array to list if needed
+                if hasattr(test_features, 'tolist'):
+                    test_features = test_features.tolist()
 
-            # Only use models with at least 50 features
-            if len(test_features) >= 50:
-                valid_models.append(model_path_candidate)
-                logger.info(f"Found valid model: {model_path_candidate} ({len(test_features)} features)")
+            # LightGBM models: accept >= 50 features (production has 82)
+            # XGBoost models: accept >= 70 features
+            min_features = 50  # Lowered to accept LightGBM with 82 features
+            if len(test_features) >= min_features:
+                valid_models.append((model_path_candidate, len(test_features)))
+                logger.info(f"✓ Found valid model: {model_path_candidate} ({len(test_features)} features)")
+            else:
+                logger.info(f"✗ Skipped {model_path_candidate}: only {len(test_features)} features (need >={min_features})")
         except Exception as e:
             logger.warning(f"Could not validate {model_path_candidate}: {e}")
 
-    # Sort by modification time, newest first
+    # Select best model: prioritize production models, then by feature count, then by modification time
     if valid_models:
-        valid_models = sorted(valid_models, key=lambda x: Path(x).stat().st_mtime, reverse=True)
-        model_path = valid_models[0]
-        logger.info(f"✅ Using best XGBoost regression model: {model_path}")
-    else:
-        # Fallback to known good model
-        model_path = "data_clean/models/xgboost_regression_30min_20251026_030337.pkl"
-        logger.info(f"Using fallback model: {model_path}")
+        # Sort: production models first, then by feature count (desc), then by mtime (desc)
+        def model_priority(item):
+            path, features = item
+            is_production = 'production' in path
+            mtime = Path(path).stat().st_mtime
+            return (is_production, features, mtime)
 
-    model = ModelInference(
-        model_path=model_path,
-        feast_repo="feature_repo"
-    )
-    logger.info("Model inference engine initialized")
+        valid_models = sorted(valid_models, key=model_priority, reverse=True)
+        model_path, num_features = valid_models[0]
+        logger.info(f"✅ Using BEST model: {model_path} ({num_features} features)")
+    else:
+        # No valid models found - this should not happen in production
+        logger.error("No valid regression models found with >= 70 features!")
+        model_path = None
+        model = None
+        raise Exception("No suitable model found for inference")
+
+    if model_path:
+        model = ModelInference(
+            model_path=model_path,
+            feast_repo="feature_repo"
+        )
+        logger.info(f"✅ Model inference engine initialized with {num_features}-feature model")
 except Exception as e:
     logger.error(f"Error initializing model: {e}")
     model = None

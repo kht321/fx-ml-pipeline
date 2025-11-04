@@ -26,9 +26,9 @@ DOCKER_URL = 'unix://var/run/docker.sock'
 # Volume mounts - shared between all tasks
 # NOTE: Change this to your working directory: /path/to/working_dir/
 MOUNTS = [
-    Mount(source='/path/to/working_dir/fx-ml-pipeline/data_clean', target='/data_clean', type='bind'),
-    Mount(source='/path/to/working_dir/fx-ml-pipeline/src_clean', target='/app/src_clean', type='bind'),
-    Mount(source='/path/to/working_dir/fx-ml-pipeline/data_clean/models', target='/data_clean/models', type='bind'),
+    Mount(source='/Users/kevintaukoor/Projects/MLE Group Original/fx-ml-pipeline/data_clean', target='/data_clean', type='bind'),
+    Mount(source='/Users/kevintaukoor/Projects/MLE Group Original/fx-ml-pipeline/src_clean', target='/app/src_clean', type='bind'),
+    Mount(source='/Users/kevintaukoor/Projects/MLE Group Original/fx-ml-pipeline/data_clean/models', target='/data_clean/models', type='bind'),
 ]
 
 # Path is based on MOUNTS as we are using DockerOperator
@@ -295,7 +295,7 @@ print('=== Markket Data Arrival ===')
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
                     mount_tmp_dir=False,
-                    mem_limit='6g',
+                    mem_limit='16g',  # Increased from 6g - merging 2.6M rows requires more memory
                     dag=dag,
                 )
 
@@ -345,7 +345,7 @@ print('=== Markket Data Arrival ===')
                     mounts=MOUNTS,
                     network_mode=NETWORK_MODE,
                     mount_tmp_dir=False,
-                    mem_limit='6g',
+                    mem_limit='8g',  # Increased from 6g - loading 713K rows with 79 columns
                     dag=dag,
                 )
 
@@ -406,7 +406,7 @@ print('=== Markket Data Arrival ===')
                 'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
             },
             mount_tmp_dir=False,
-            mem_limit='4g',
+            mem_limit='32g',  # Sequential training - adequate for CSV save (OOM at 28GB previously)
             dag=dag,
         )
 
@@ -435,7 +435,7 @@ print('=== Markket Data Arrival ===')
                 'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
             },
             mount_tmp_dir=False,
-            mem_limit='4g',
+            mem_limit='16g',  # Optimized with vectorized merge_asof (down from 40GB)
             dag=dag,
         )
 
@@ -491,12 +491,13 @@ print('=== Markket Data Arrival ===')
                 'MLFLOW_TRACKING_URI': 'http://ml-mlflow:5000'
             },
             mount_tmp_dir=False,
-            mem_limit='4g',
+            mem_limit='32g',  # Sequential training - adequate for CSV save
             dag=dag,
         )
 
-        # [train_xgboost_model, train_lightgbm_model, train_arima_model]
-        [train_xgboost_model, train_lightgbm_model, train_ar_model]
+        # Train models SEQUENTIALLY to reduce peak memory (48GB -> 32GB max)
+        # Order: XGBoost (fastest) -> LightGBM (medium) -> AR (slowest)
+        train_xgboost_model >> train_lightgbm_model >> train_ar_model
 
     # ============================================================================
     # STAGE 3: Model Selection & Deployment

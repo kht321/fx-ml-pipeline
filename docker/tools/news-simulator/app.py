@@ -29,7 +29,8 @@ CORS(app)
 
 # Configuration
 NEWS_DATA_DIR = Path("../data/news/bronze/raw_articles/")
-NEWS_OUTPUT_DIR = Path(os.getenv("NEWS_OUTPUT_DIR", "../data/news/bronze/simulated/"))
+# Fix: Use correct path that matches Streamlit and FastAPI
+NEWS_OUTPUT_DIR = Path(os.getenv("NEWS_OUTPUT_DIR", "/app/data_clean/bronze/news/simulated/"))
 NEWS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory storage for loaded news
