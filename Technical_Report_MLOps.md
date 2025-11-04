@@ -1268,6 +1268,263 @@ PARALLEL: ONLINE INFERENCE (Every 15 min)
 
 ---
 
-**Report Version:** 2.0
+## Appendix: Model Selection and Deployment Process - Airflow & MLflow Integration
+
+### Architecture Overview
+
+The S&P 500 ML pipeline implements an automated model selection and deployment process through tight integration between Apache Airflow (orchestration) and MLflow (model registry). This section details the technical implementation of how the best model is automatically selected from multiple candidates and deployed to production.
+
+### A.1 Airflow DAG Structure for Model Training & Selection
+
+#### Main Training DAG: `sp500_ml_pipeline_v4_docker.py`
+
+The Airflow DAG orchestrates parallel model training followed by automatic selection:
+
+```python
+# DAG Task Structure (17 total tasks)
+with DAG('sp500_ml_pipeline_v4_docker',
+         schedule_interval=None,
+         default_args=default_args) as dag:
+
+    # Phase 1: Data Preparation (Tasks 1-10)
+    validate_data >> silver_processing >> gold_processing
+
+    # Phase 2: Parallel Model Training (Tasks 11-13)
+    train_models = [
+        train_xgboost_task,
+        train_lightgbm_task,
+        train_ar_task
+    ]
+
+    # Phase 3: Model Selection (Task 14)
+    select_best_model = DockerOperator(
+        task_id='select_best_model',
+        image='ml-pipeline:latest',
+        command='python src_clean/training/model_selector.py'
+    )
+
+    # Phase 4: Deployment (Tasks 15-17)
+    deploy_to_production >> monitor_deployment >> send_alerts
+
+    # Task Dependencies
+    gold_processing >> train_models >> select_best_model >> deploy_to_production
+```
+
+### A.2 MLflow Integration in Training Scripts
+
+Each training script follows this pattern for MLflow integration:
+
+```python
+class XGBoostTrainingPipeline:
+    def train_and_log_model(self, X_train, y_train, X_val, y_val):
+        with mlflow.start_run(run_name=f"xgboost_{datetime.now()}") as run:
+            # Log parameters
+            mlflow.log_params({
+                "max_depth": self.best_params['max_depth'],
+                "learning_rate": self.best_params['learning_rate'],
+                "n_estimators": self.best_params['n_estimators']
+            })
+
+            # Train model
+            model = xgb.XGBRegressor(**self.best_params)
+            model.fit(X_train, y_train, eval_set=[(X_val, y_val)])
+
+            # Log metrics
+            mlflow.log_metrics({
+                "train_rmse": metrics['train_rmse'],
+                "val_rmse": metrics['val_rmse'],
+                "test_rmse": metrics['test_rmse'],
+                "oot_rmse": metrics['oot_rmse']
+            })
+
+            # Log model with signature
+            mlflow.xgboost.log_model(
+                model,
+                artifact_path="model",
+                registered_model_name="sp500_xgboost_model"
+            )
+
+            return run.info.run_id, metrics['test_rmse']
+```
+
+### A.3 Model Selection Process
+
+The model selector runs after all models complete training:
+
+```python
+class ModelSelector:
+    def select_best_model(self):
+        """Select best model across all experiments"""
+
+        # Gather all recent runs from MLflow
+        all_runs = []
+        for experiment_name in ["sp500_xgboost_v4", "sp500_lightgbm_v4", "sp500_ar_v4"]:
+            runs = self.mlflow_client.search_runs(
+                experiment_ids=[experiment.experiment_id],
+                order_by=["metrics.test_rmse ASC"],
+                max_results=10
+            )
+            all_runs.extend(runs)
+
+        # Apply selection criteria
+        best_model = self._apply_selection_criteria(all_runs)
+
+        # Register best model
+        model_version = self.mlflow_client.create_model_version(
+            name="sp500_best_model",
+            source=f"runs:/{best_model['run_id']}/model",
+            description=f"Best model: {best_model['model_type']}, "
+                       f"Test RMSE: {best_model['test_rmse']:.4f}"
+        )
+
+        # Transition to staging
+        self.mlflow_client.transition_model_version_stage(
+            name="sp500_best_model",
+            version=model_version.version,
+            stage="Staging"
+        )
+
+        return best_model
+```
+
+### A.4 Blue-Green Deployment Strategy
+
+The deployment implements a blue-green strategy for zero-downtime updates:
+
+```python
+class ModelDeployer:
+    def deploy_to_production(self):
+        """Deploy staged model to production with validation"""
+
+        # Get latest staged model
+        staged_model = self._get_latest_staged_model()
+
+        # Validate model performance
+        if not self._validate_model(staged_model):
+            raise Exception("Model validation failed")
+
+        # Blue-Green deployment
+        self._perform_blue_green_deployment(staged_model)
+
+        # Transition model stage in MLflow
+        self._transition_to_production(staged_model)
+
+    def _perform_blue_green_deployment(self, model_version):
+        """Implement blue-green deployment strategy"""
+
+        # Deploy to green environment
+        response = requests.post(
+            "http://model-green:8002/deploy",
+            json={
+                "model_name": "sp500_best_model",
+                "model_version": model_version.version
+            }
+        )
+
+        # Gradually shift traffic (via Nginx)
+        self._update_nginx_config(green_weight=20)  # Start with 20%
+        time.sleep(300)  # Monitor for 5 minutes
+
+        # Check metrics and decide
+        if self._check_deployment_metrics():
+            self._update_nginx_config(green_weight=100)  # Full switch
+        else:
+            self._update_nginx_config(green_weight=0)  # Rollback
+            raise Exception("Deployment metrics check failed")
+```
+
+### A.5 Complete Workflow Example
+
+End-to-End Execution Flow:
+
+```
+1. Airflow Scheduler triggers DAG
+   ↓
+2. Data validation and feature engineering (Tasks 1-10)
+   ↓
+3. Parallel model training:
+   - XGBoost trains → Logs to MLflow
+   - LightGBM trains → Logs to MLflow
+   - AR model trains → Logs to MLflow
+   ↓
+4. Model Selector task:
+   - Queries all experiments from MLflow
+   - Compares test_rmse, oot_rmse, training_time
+   - Selects best model (e.g., LightGBM with RMSE 0.1746)
+   - Registers as "sp500_best_model" version N
+   - Transitions to "Staging"
+   ↓
+5. Deployment task:
+   - Validates staged model on recent data
+   - Deploys to green environment
+   - Gradually shifts traffic (20% → 100%)
+   - If successful, transitions to "Production" in MLflow
+   ↓
+6. Monitoring task:
+   - Sends success email with metrics
+   - Updates dashboard
+```
+
+### A.6 Actual Implementation Results
+
+From the latest pipeline run:
+
+```python
+# Model Comparison Results
+{
+    "xgboost": {
+        "test_rmse": 0.1755,
+        "oot_rmse": 0.1088,
+        "training_time": 4.2
+    },
+    "lightgbm": {
+        "test_rmse": 0.1746,  # SELECTED
+        "oot_rmse": 0.1083,
+        "training_time": 2.8
+    },
+    "ar": {
+        "test_rmse": 0.1850,
+        "oot_rmse": 0.1150,
+        "training_time": 2.3
+    }
+}
+
+# Selection Metadata
+{
+    "selected_model": "lightgbm",
+    "model_version": 58,
+    "deployment_status": "production",
+    "deployment_time": "2024-11-03T15:30:00Z"
+}
+```
+
+### A.7 Error Handling and Rollback
+
+Automatic rollback triggers based on:
+
+```python
+def _check_deployment_metrics(self):
+    """Monitor deployment and trigger rollback if needed"""
+
+    metrics = {
+        'error_rate': self._get_error_rate(),
+        'latency_p99': self._get_latency(),
+        'drift_score': self._get_drift_score()
+    }
+
+    # Rollback conditions
+    if metrics['error_rate'] > 0.05:  # >5% errors
+        return False
+    if metrics['latency_p99'] > 200:  # >200ms latency
+        return False
+    if metrics['drift_score'] > 0.15:  # Significant drift
+        return False
+
+    return True
+```
+
+---
+
+**Report Version:** 2.1
 **Last Updated:** November 4, 2024
 **Repository:** https://github.com/kht321/fx-ml-pipeline
