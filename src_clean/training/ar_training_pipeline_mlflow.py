@@ -719,7 +719,7 @@ class AutoregressiveOLSMLflowTrainingPipeline(XGBoostMLflowTrainingPipeline):
             logger.info("News features provided but ignored for autoregressive modelling.")
 
         if self.accelerate_dataset:
-            market_df = market_df.head(10000)
+            market_df = market_df.head(30000)
             logger.info("Dataset accelerated for TESTING ENVIRONMENT: using first 10,000 samples for training.")
         final_model, metrics = self.train_model(market_df)
         feature_names = metrics.get("feature_names", [])
@@ -807,8 +807,22 @@ def main() -> None:
         default="mlruns",
         help="MLflow tracking URI",
     )
+    parser.add_argument(
+        "--accelerate-dataset",
+        type=str,
+        default="False",
+        help="Use a smaller dataset for faster testing"
+    )
+    parser.add_argument(
+        "--enable-tuning",
+        type=str,
+        default="False",
+        help="Enable hyperparameter tuning"
+    )
 
     args = parser.parse_args()
+    args.accelerate_dataset = args.accelerate_dataset.lower() == "true"
+    args.enable_tuning = args.enable_tuning.lower() == "true"
 
     mlflow.set_tracking_uri(args.mlflow_uri)
     mlflow.set_registry_uri(args.mlflow_uri)
@@ -822,6 +836,8 @@ def main() -> None:
         experiment_name=args.experiment_name,
         lag_min=args.lag_min,
         lag_max=args.lag_max,
+        enable_tuning=args.enable_tuning,
+        accelerate_dataset=args.accelerate_dataset,
     )
 
     pipeline.run()

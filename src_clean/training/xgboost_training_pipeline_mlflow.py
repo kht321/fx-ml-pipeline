@@ -34,6 +34,7 @@ import sys
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+import lightgbm as lgb
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import (
     classification_report, confusion_matrix, roc_auc_score,
@@ -147,6 +148,7 @@ class XGBoostMLflowTrainingPipeline:
         enable_tuning : bool
             Enable hyperparameter tuning
         """
+        self.model_name = "xgboost"
         self.market_features_path = market_features_path
         self.labels_path = labels_path
         self.news_signals_path = news_signals_path
@@ -443,21 +445,27 @@ class XGBoostMLflowTrainingPipeline:
         """
 
         n = len(X_sorted)
-        # Use percentage-based splits instead of hard-coded timestamps
-        # This ensures compatibility with different dataset sizes (713K vs 2.6M rows)
-        train_end = int(n * train_ratio)
-        val_end = int(n * (train_ratio + val_ratio))
-        test_end = int(n * (train_ratio + val_ratio + test_ratio))
+
+        if self.accelerate_dataset:
+            train_end = int(n * train_ratio)
+            val_end = int(n * (train_ratio + val_ratio))
+            test_end = int(n * (train_ratio + val_ratio + test_ratio))
+            oot2 = -10
+        else:
+            train_end = np.where(time_sorted<=pd.to_datetime('2023-10-12 16:03:00+00:00'))[0][-1]  #int(n * train_ratio)
+            val_end = np.where(time_sorted<=pd.to_datetime('2024-10-11 06:16:00+00:00'))[0][-1]  #int(n * (train_ratio + val_ratio))
+            test_end = np.where(time_sorted<=pd.to_datetime('2025-04-11 13:22:00+00:00'))[0][-1]  #int(n * (train_ratio + val_ratio + test_ratio))
+            oot2 = -10000
 
         splits = {
             'train_idx': X_sorted.index[:train_end],
             'val_idx': X_sorted.index[train_end:val_end],
             'test_idx': X_sorted.index[val_end:test_end],
-            'oot_idx': X_sorted.index[test_end:-10000],  # exclude 10000 data for OOT2
+            'oot_idx': X_sorted.index[test_end:oot2],  # exclude 10000 data for OOT2
             'train_dates': (time_sorted.iloc[0], time_sorted.iloc[train_end-1]),
             'val_dates': (time_sorted.iloc[train_end], time_sorted.iloc[val_end-1]),
             'test_dates': (time_sorted.iloc[val_end], time_sorted.iloc[test_end-1]),
-            'oot_dates': (time_sorted.iloc[test_end], time_sorted.iloc[-10000-1])
+            'oot_dates': (time_sorted.iloc[test_end], time_sorted.iloc[oot2-1])
         }
 
         # Log split information
@@ -520,16 +528,19 @@ class XGBoostMLflowTrainingPipeline:
             mlflow.log_param("news_available", 'news_available' in X.columns)
 
             # Time series split for CV (only on train+val)
-            tscv = TimeSeriesSplit(n_splits=5)
+            # tscv = TimeSeriesSplit(n_splits=5)
             test_size = int(0.15 * X_train_val.shape[0])
             tscv = TimeSeriesSplit(n_splits=3, test_size=test_size)
 
-            selected_feature_names = feature_names
+            
 
             if self.enable_tuning:
                 logger.info("Performing hyperparameter tuning on train+val...")
                 model = self._tune_hyperparameters(X_train_val, y_train_val, tscv)
                 selected_feature_names = getattr(self, "selected_feature_names", feature_names)
+                self.selected_feature_names = selected_feature_names
+                logger.info(f"Selected {len(selected_feature_names)} features after tuning.")
+                logger.info(f"Selected features are: {selected_feature_names}")
             else:
                 # Use default parameters
                 if self.task == "classification":
@@ -539,6 +550,7 @@ class XGBoostMLflowTrainingPipeline:
 
                 # Log model parameters
                 mlflow.log_params(self.xgb_params[self.task])
+                selected_feature_names = feature_names
                 self.selected_feature_names = feature_names
                 self.selected_feature_group = "all"
                 mlflow.log_param("selected_feature_group", "all")
@@ -772,8 +784,6 @@ class XGBoostMLflowTrainingPipeline:
 
             logger.info(f"\nMLflow run ID: {mlflow.active_run().info.run_id}")
             logger.info("="*80 + "\n")
-
-            self.selected_feature_names = selected_feature_names
             return model, metrics
 
     def _format_metrics(self, metrics: Dict) -> str:
@@ -936,6 +946,9 @@ class XGBoostMLflowTrainingPipeline:
         best_stage2_params = stage2_study.best_trial.params.copy()
         best_group = best_stage2_params.pop("feature_group", "all")
         selected_features = X_df.columns.tolist() if best_group == "all" else feature_groups.get(best_group, X_df.columns.tolist())
+        logger.info("Stage 2 complete: best %s=%.5f with params=%s and feature_group=%s",
+                    metric_name, stage2_study.best_value, best_stage2_params, best_group)
+        logger.info(f"Selected {len(selected_features)} features: {selected_features}")
         mlflow.log_dict(
             {**best_stage2_params, "feature_group": best_group},
             f"hyperparameters/{self.experiment_name}/stage2_best_params.json"
@@ -1060,7 +1073,7 @@ class XGBoostMLflowTrainingPipeline:
 
     def save_model_and_artifacts(
         self,
-        model: xgb.XGBModel,
+        model,
         feature_names: list,
         metrics: Dict
     ):
@@ -1068,7 +1081,7 @@ class XGBoostMLflowTrainingPipeline:
         logger.info("Saving model artifacts locally...")
 
         timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        model_name = f"xgboost_{self.task}_{self.prediction_horizon}min_{timestamp}"
+        model_name = f"{self.model_name}_{self.task}_{self.prediction_horizon}min_{timestamp}"
 
         # Save model
         model_path = self.output_dir / f"{model_name}.pkl"
@@ -1089,7 +1102,7 @@ class XGBoostMLflowTrainingPipeline:
     def run(self):
         """Execute the full training pipeline with MLflow."""
         logger.info("\n" + "="*80)
-        logger.info(f"XGBoost Training Pipeline with MLflow - {self.prediction_horizon}min Prediction")
+        logger.info(f"{self.model_name} Training Pipeline with MLflow - {self.prediction_horizon}min Prediction")
         logger.info("="*80 + "\n")
 
         # Load data (market features + gold labels)
@@ -1098,7 +1111,7 @@ class XGBoostMLflowTrainingPipeline:
         # Validate labels are present
         market_df = self.validate_labels(market_df)
         if self.accelerate_dataset:
-            market_df = market_df.head(10000)
+            market_df = market_df.head(30000)
             logger.info("Dataset accelerated for TESTING ENVIRONMENT: using first 10,000 samples for training.")
 
         # Merge with news
@@ -1183,18 +1196,40 @@ def main():
         help="MLflow experiment name"
     )
     parser.add_argument(
-        "--enable-tuning",
-        action="store_true",
-        help="Enable hyperparameter tuning"
-    )
-    parser.add_argument(
         "--mlflow-uri",
         type=str,
         default="mlruns",
         help="MLflow tracking URI"
     )
+    parser.add_argument(
+        "--stage1-n-trials",
+        type=int,
+        default=5,
+        help="Number of trials for stage 1"
+    )
+    parser.add_argument(
+        "--stage2-n-trials",
+        type=int,
+        default=5,
+        help="Number of trials for stage 2"
+    )
+    parser.add_argument(
+        "--accelerate-dataset",
+        type=str,
+        default="False",
+        help="Use a smaller dataset for faster testing"
+    )
+    parser.add_argument(
+        "--enable-tuning",
+        type=str,
+        default="False",
+        help="Enable hyperparameter tuning"
+    )
+
 
     args = parser.parse_args()
+    args.enable_tuning = args.enable_tuning.lower() == "true"
+    args.accelerate_dataset = args.accelerate_dataset.lower() == "true"
 
     # Set MLflow tracking URI
     mlflow.set_tracking_uri(args.mlflow_uri)
@@ -1208,7 +1243,10 @@ def main():
         output_dir=args.output_dir,
         task=args.task,
         experiment_name=args.experiment_name,
-        enable_tuning=args.enable_tuning
+        enable_tuning=args.enable_tuning,
+        accelerate_dataset=args.accelerate_dataset,
+        stage1_n_trials=args.stage1_n_trials,
+        stage2_n_trials=args.stage2_n_trials,
     )
 
     pipeline.run()
