@@ -840,6 +840,10 @@ fx-ml-pipeline/
 - [Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md) - Complete feature overview
 - [Optimization Guide](docs/OPTIMIZATION_COMPLETE.md) - FinBERT performance improvements
 
+**Technical Reports:**
+- [Technical Implementation Report](FX_ML_Pipeline_Report_Word.md) - Comprehensive 8-page technical report for stakeholders
+- [Implementation Checklist](#implementation-checklist) - Evidence-based feature checklist
+
 **Setup Guides:**
 - [Gmail Setup](docs/GMAIL_APP_PASSWORD_SETUP.md) - Email alerting configuration
 - [Airflow Guide](docs/AIRFLOW_SETUP_GUIDE.md) - Airflow configuration and usage
