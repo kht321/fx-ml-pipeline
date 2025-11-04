@@ -840,10 +840,16 @@ fx-ml-pipeline/
 - [Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md) - Complete feature overview
 - [Optimization Guide](docs/OPTIMIZATION_COMPLETE.md) - FinBERT performance improvements
 
-**Technical Reports:**
-- **[MLOps Implementation Report](Technical_Report_MLOps.md)** - Evidence-based MLOps practices documentation with actual metrics and configurations
-- [Technical Implementation Report](Technical_Report.md) - Comprehensive technical report with statistical validation
-- [Implementation Checklist](#implementation-checklist) - Evidence-based feature checklist
+**Technical Report:**
+- **[MLOps Implementation Report](Technical_Report_MLOps.md)** - Complete technical documentation covering:
+  - System architecture and 21 containerized services
+  - Feature engineering (76 market + 11 news features)
+  - Model training and deployment (XGBoost, LightGBM, ARIMAX)
+  - MLflow experiment tracking and model registry
+  - Feast feature store integration
+  - Evidently AI drift monitoring
+  - Complete system integration and data flow
+  - Evidence-based with actual metrics and file references
 
 **Setup Guides:**
 - [Gmail Setup](docs/GMAIL_APP_PASSWORD_SETUP.md) - Email alerting configuration
