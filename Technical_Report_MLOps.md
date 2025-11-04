@@ -853,9 +853,365 @@ docker stats
 
 ---
 
-## 15. FUTURE ENHANCEMENTS
+## 15. SYSTEM INTEGRATION & DATA FLOW
 
-### 15.1 Planned Improvements
+### 15.1 Complete Pipeline Architecture
+
+The system integrates 7 major components through a coordinated data flow:
+
+**Component Stack:**
+1. **News Simulator** → Generates/streams news articles
+2. **Airflow DAGs** → Orchestrates training and inference pipelines
+3. **Feast Feature Store** → Serves features with low latency
+4. **MLflow** → Tracks experiments and manages model lifecycle
+5. **FastAPI Backend** → Serves predictions via REST API
+6. **Evidently AI** → Monitors drift and performance
+7. **Streamlit Dashboard** → Visualizes predictions and metrics
+
+### 15.2 Online Inference Pipeline Flow
+
+**Every 15 Minutes (Real-time Processing):**
+
+```
+1. News Simulator (Port 5050)
+   ├─ Endpoint: POST /api/stream/<sentiment_type>
+   ├─ Output: /data_clean/bronze/news/simulated/*.json
+   └─ Sentiment: positive, negative, neutral, custom
+
+2. Airflow Online Inference DAG (sp500_online_inference_pipeline.py)
+   ├─ Task 1: check_new_news
+   │   └─ Polls /data_clean/bronze/news/simulated/
+   │   └─ Checks files modified in last 20 minutes
+   │
+   ├─ Task 2: process_news_sentiment (Silver Layer)
+   │   └─ Input: simulated/*.json
+   │   └─ Output: /data_clean/silver/news/sentiment/online_sentiment.csv
+   │   └─ Processing: TextBlob sentiment analysis
+   │
+   ├─ Task 3: build_news_signals (Gold Layer)
+   │   └─ Input: online_sentiment.csv
+   │   └─ Output: /data_clean/gold/news/signals/online_trading_signals.csv
+   │   └─ Processing: 15-minute aggregation, FinBERT scoring
+   │   └─ Features: avg_sentiment, signal_strength, trading_signal, article_count
+   │
+   ├─ Task 4: materialize_to_feast
+   │   └─ Loads features into Feast online store (Redis)
+   │   └─ Entity: instrument=SPX500_USD
+   │   └─ Features: news_signals view (6 features)
+   │
+   └─ Task 5: validate_feast_readiness
+       └─ Confirms features accessible via Feast API
+
+3. Feast Feature Store (Port 6566)
+   ├─ Online Store: SQLite/Redis (sub-millisecond retrieval)
+   ├─ Feature Views:
+   │   ├─ market_features (14 indicators, TTL=1 day)
+   │   └─ news_signals (6 signals, TTL=2 hours)
+   └─ Retrieval: feast.get_online_features()
+
+4. FastAPI Backend (Port 8000)
+   ├─ Endpoint: POST /predict
+   ├─ Step 1: Load model from production directory
+   │   └─ Priority: lightgbm_regression_*_production.pkl
+   │   └─ Features: 76 market + 11 news (87 total capable)
+   │
+   ├─ Step 2: Fetch features from Feast
+   │   └─ Market features: close, rsi_14, macd, volatility, etc.
+   │   └─ News signals: avg_sentiment, signal_strength, article_count
+   │
+   ├─ Step 3: Get simulated news sentiment
+   │   └─ Supplements Feast features with latest simulated news
+   │
+   ├─ Step 4: Make prediction
+   │   └─ Model: LightGBM regression
+   │   └─ Output: 30-minute price change forecast
+   │
+   └─ Step 5: Log prediction
+       └─ File: /data_clean/predictions/prediction_log.jsonl
+       └─ Format: {timestamp, prediction, features, confidence}
+
+5. Streamlit Dashboard (Port 8501)
+   └─ Displays predictions, news sentiment, confidence scores
+   └─ Real-time updates via FastAPI websocket
+```
+
+**Schedule:** Runs every 15 minutes (configurable: `*/15 * * * *`)
+
+### 15.3 Training Pipeline Flow
+
+**Daily at 2 AM UTC (Batch Retraining):**
+
+```
+1. Airflow Training DAG (sp500_ml_pipeline_v4_docker.py)
+
+   Stage 1: Data Validation (1 task)
+   ├─ validate_bronze_data
+   └─ Checks: row count, schema, missing values, freshness
+
+   Stage 2: Silver Layer Processing (4 parallel tasks)
+   ├─ silver_technical (RSI, MACD, Bollinger Bands)
+   ├─ silver_microstructure (spread, volume, liquidity)
+   ├─ silver_volatility (GK, Parkinson, Yang-Zhang)
+   └─ silver_news (TextBlob sentiment on historical articles)
+
+   Stage 3: Gold Layer Building (3 parallel tasks)
+   ├─ gold_market_features (merge technical + micro + vol)
+   ├─ gold_news_signals (FinBERT batch processing, 64 articles/batch)
+   └─ gold_labels (30-minute forward returns)
+
+   Stage 4: Quality Validation (1 task)
+   └─ validate_gold_quality (drift checks, outlier detection)
+
+   Stage 5: Model Training (3 sequential tasks)
+   ├─ train_xgboost → 76 features, runtime 3-4 min
+   ├─ train_lightgbm → 76 features, runtime 2-3 min
+   └─ train_arimax → 76 exogenous features, runtime 2-3 min
+
+   Stage 6: Model Selection (1 task)
+   └─ select_best_model_by_rmse
+       ├─ Compare: xgboost vs lightgbm vs arimax
+       ├─ Metric: Test RMSE (primary), OOT RMSE (secondary)
+       └─ Output: production/best_model_<type>.pkl
+
+   Stage 7: Model Validation (1 task)
+   └─ validate_production_candidate
+       └─ Smoke tests on selected model
+
+   Stage 8: MLflow Registration (1 task)
+   └─ register_model_to_mlflow
+       ├─ Registers to model registry
+       ├─ Stages: None → Staging → Production
+       └─ Tags: model_type, test_rmse, oot_rmse, features
+
+   Stage 9: Deployment (1 task)
+   └─ deploy_model_to_production
+       ├─ Copies to production directory
+       └─ FastAPI picks up on next /predict call
+
+   Stage 10: Monitoring (1 task)
+   └─ generate_evidently_report
+       └─ Triggers drift detection and alerting
+```
+
+**Total Runtime:** 25-35 minutes (full pipeline)
+
+### 15.4 MLflow Integration
+
+**Model Lifecycle Management:**
+
+```
+1. Training Phase (lightgbm_training_pipeline_mlflow.py)
+   ├─ mlflow.start_run()
+   ├─ Log parameters: model_type, n_features, hyperparams
+   ├─ Log metrics: train_rmse, val_rmse, test_rmse, oot_rmse
+   ├─ Log artifacts: model.pkl, feature_importance.png
+   └─ mlflow.lightgbm.log_model(model, "model")
+
+2. Model Registry (port 5001)
+   ├─ Register: mlflow.register_model(model_uri, name="sp500_best_model")
+   ├─ Versioning: v1, v2, v3, ..., v58+ (automatic)
+   ├─ Stages:
+   │   ├─ None (default after registration)
+   │   ├─ Staging (candidate for production)
+   │   ├─ Production (active in FastAPI)
+   │   └─ Archived (retired models)
+   └─ Aliases:
+       ├─ champion (current production model)
+       └─ challenger (candidate for A/B testing)
+
+3. Model Loading (src_clean/api/inference.py)
+   ├─ Search patterns (priority order):
+   │   1. data_clean/models/lightgbm_regression_*_production.pkl
+   │   2. models/production/best_model_lightgbm.pkl
+   │   3. data_clean/models/lightgbm_regression_*.pkl
+   └─ Fallback: Load from MLflow registry
+       └─ mlflow.pyfunc.load_model("models:/sp500_best_model/Production")
+
+4. Model Promotion (mlflow_model_manager.py)
+   └─ CLI: python -m src_clean.monitoring.mlflow_model_manager
+       ├─ --action list (view all versions)
+       ├─ --action promote-staging --version 3
+       ├─ --action promote-prod --version 3
+       └─ --action compare --version 2 --version2 3
+```
+
+**Backend Storage:**
+- Metadata: PostgreSQL (ml-postgres:5432)
+- Artifacts: /mlflow/artifacts (Docker volume)
+- Experiments: 58+ tracked model versions
+
+### 15.5 Evidently AI Monitoring Integration
+
+**Drift Detection Workflow:**
+
+```
+1. Prediction Logging (FastAPI)
+   ├─ File: data_clean/predictions/prediction_log.jsonl
+   ├─ Format: {timestamp, prediction, actual, features}
+   └─ Appended after each /predict call
+
+2. Evidently Report Generation (Training DAG Task 10)
+   ├─ Reference data: Training set (historical baseline)
+   ├─ Current data: prediction_log.jsonl (last 24 hours)
+   │
+   ├─ Data Drift Detection:
+   │   ├─ Test: Kolmogorov-Smirnov (KS test)
+   │   ├─ Threshold: D-statistic > 0.1
+   │   ├─ Per-feature drift scores
+   │   └─ Alert: dataset_drift_detected = True
+   │
+   ├─ Performance Degradation:
+   │   ├─ Metric: RMSE increase
+   │   ├─ Threshold: >20% degradation
+   │   ├─ Baseline: training RMSE = 0.1746
+   │   └─ Alert: rmse_increase > 0.20
+   │
+   ├─ Missing Values:
+   │   ├─ Threshold: >5% missing per feature
+   │   └─ Alert: missing_share > 0.05
+   │
+   └─ HTML Report:
+       ├─ Output: /reports/drift_report_YYYYMMDD_HH.html
+       ├─ Sections: Data drift, Model quality, Feature importance
+       └─ Visualizations: Distribution plots, drift scores, SHAP
+
+3. Email Alerting (email_alerter.py)
+   ├─ Trigger conditions:
+   │   ├─ dataset_drift_detected = True
+   │   ├─ drift_share > 0.30 (30% features drifted)
+   │   ├─ rmse_increase > 0.20 (20% degradation)
+   │   └─ missing_share > 0.05 (5% missing data)
+   │
+   ├─ Email content:
+   │   ├─ Subject: "🚨 Model Drift Alert - SP500 Predictor"
+   │   ├─ Body: HTML formatted drift summary table
+   │   ├─ Attachment: drift_report.html
+   │   └─ Recipients: Configured in .env.monitoring
+   │
+   └─ SMTP: Gmail (smtp.gmail.com:587, TLS)
+
+4. Monitoring Dashboard (Evidently, port 8050)
+   └─ Real-time drift metrics visualization
+   └─ Historical drift trends
+   └─ Feature attribution changes
+```
+
+**Integration Points:**
+- **Airflow → Evidently:** Training DAG triggers report generation
+- **FastAPI → Evidently:** Logs predictions for drift analysis
+- **Evidently → Email:** Sends alerts on threshold violations
+
+### 15.6 Complete System Integration Diagram
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                        USER REQUEST                                 │
+│                  POST /predict {"instrument": "SPX500_USD"}         │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+                    ┌──────────────────────┐
+                    │   FastAPI (8000)     │
+                    │  - Load LightGBM     │
+                    │  - 76 market + 11    │
+                    │    news features     │
+                    └──────────┬───────────┘
+                               │
+                ┌──────────────┼──────────────┐
+                │              │              │
+                ▼              ▼              ▼
+    ┌─────────────────┐  ┌──────────┐  ┌──────────────┐
+    │  Feast (6566)   │  │  MLflow  │  │ News Sim     │
+    │  - Market feat  │  │  (5001)  │  │ (5050)       │
+    │  - News signals │  │  - Model │  │  - Sentiment │
+    │  - Redis cache  │  │    v58+  │  │    stream    │
+    └─────────────────┘  └──────────┘  └──────────────┘
+                │              │              │
+                └──────────────┼──────────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │  Prediction Response │
+                    │  - Price forecast    │
+                    │  - Confidence        │
+                    │  - Feature values    │
+                    └──────────┬───────────┘
+                               │
+                ┌──────────────┼──────────────┐
+                │              │              │
+                ▼              ▼              ▼
+    ┌─────────────────┐  ┌──────────┐  ┌──────────────┐
+    │  Streamlit      │  │ Pred Log │  │  Evidently   │
+    │  Dashboard      │  │ (JSONL)  │  │  Monitor     │
+    │  (8501)         │  │          │  │  (8050)      │
+    └─────────────────┘  └──────────┘  └──────────────┘
+
+PARALLEL: TRAINING PIPELINE (Daily 2 AM)
+
+┌────────────────────────────────────────────────────────────────────┐
+│                   Airflow Training DAG (8080)                      │
+│                                                                    │
+│  1. Bronze → Silver (4 parallel)                                  │
+│     Technical│Micro│Vol│News → /data_clean/silver/               │
+│                                                                    │
+│  2. Silver → Gold (3 parallel)                                    │
+│     Market│NewsSignals│Labels → /data_clean/gold/                │
+│                                                                    │
+│  3. Train 3 Models (sequential)                                   │
+│     XGBoost → LightGBM → ARIMAX                                   │
+│            ↓                                                       │
+│     Select Best (RMSE) → /models/production/                      │
+│            ↓                                                       │
+│     Register to MLflow (stage=Production)                         │
+│            ↓                                                       │
+│     Generate Evidently Report → Email Alert                       │
+└────────────────────────────────────────────────────────────────────┘
+
+PARALLEL: ONLINE INFERENCE (Every 15 min)
+
+┌────────────────────────────────────────────────────────────────────┐
+│              Airflow Online Inference DAG (8080)                   │
+│                                                                    │
+│  1. Check new news → /bronze/news/simulated/                      │
+│  2. Process sentiment → /silver/news/sentiment/                   │
+│  3. Build signals → /gold/news/signals/                           │
+│  4. Materialize to Feast → Redis online store                     │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 15.7 Key Integration Benefits
+
+**1. Decoupled Architecture**
+- Each component (MLflow, Feast, Evidently) operates independently
+- Failure in monitoring doesn't affect predictions
+- Easy to swap/upgrade individual components
+
+**2. Feature Store Consistency**
+- Same features for training (batch) and serving (online)
+- Point-in-time correct historical features (no look-ahead bias)
+- Sub-millisecond retrieval from Redis
+
+**3. Model Lifecycle Management**
+- Complete lineage: data → features → model → predictions
+- Reproducible experiments (58+ versions tracked)
+- Safe deployments via staging/production stages
+
+**4. Automated Monitoring**
+- Continuous drift detection (hourly)
+- Automated email alerts (no manual checking)
+- Historical drift trends (HTML reports)
+
+**5. Orchestration Benefits**
+- Declarative pipeline definitions (Airflow DAGs)
+- Automatic retries on failure
+- Clear dependency management
+- Parallel execution where possible
+
+---
+
+## 16. FUTURE ENHANCEMENTS
+
+### 16.1 Planned Improvements
 
 1. **Kubernetes Migration**
    - Scale from 16 to 100+ containers
