@@ -841,7 +841,7 @@ fx-ml-pipeline/
 - [Optimization Guide](docs/OPTIMIZATION_COMPLETE.md) - FinBERT performance improvements
 
 **Technical Reports:**
-- [Technical Implementation Report](FX_ML_Pipeline_Report_Word.md) - Comprehensive 8-page technical report for stakeholders
+- [Technical Implementation Report](Technical_Report.md) - Comprehensive 8-page technical report for stakeholders
 - [Implementation Checklist](#implementation-checklist) - Evidence-based feature checklist
 
 **Setup Guides:**
