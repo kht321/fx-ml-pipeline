@@ -800,8 +800,8 @@ fx-ml-pipeline/
 ├── airflow_mlops/               # Airflow orchestration
 │   └── dags/
 │       ├── sp500_ml_pipeline_v4_docker.py        # Training DAG (17 tasks)
-│       ├── sp500_ml_pipeline_v4_docker_DEBUG.py  # Debug/testing DAG (16 tasks)
-│       └── online_inference_dag.py               # Real-time inference DAG
+│       ├── sp500_ml_pipeline_v4_1_docker.py      # Alternative training DAG
+│       └── sp500_online_inference_pipeline.py    # Real-time inference DAG
 │
 ├── docs/                        # Documentation
 │   ├── QUICKSTART.md            # Quick start guide
@@ -841,7 +841,7 @@ fx-ml-pipeline/
 - [Optimization Guide](docs/OPTIMIZATION_COMPLETE.md) - FinBERT performance improvements
 
 **Technical Report:**
-- **[MLOps Implementation Report](Technical_Report_MLOps.md)** - Complete technical documentation covering:
+- **[MLOps Implementation Report](docs/Technical_Report_MLOps.md)** - Complete technical documentation covering:
   - System architecture and 21 containerized services
   - Feature engineering (76 market + 11 news features)
   - Model training and deployment (XGBoost, LightGBM, ARIMAX)
