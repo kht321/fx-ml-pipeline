@@ -101,7 +101,6 @@ class ModelInference:
                     Path("models/xgboost_combined_model.pkl"),
                     Path("data_clean/models/xgboost_classification_enhanced.pkl"),
                     Path("models/random_forest_combined_model.pkl"),
-                    Path("data/combined/models/gradient_boosting_combined_model.pkl"),
                 ])
 
                 for alt_path in alternative_paths:
@@ -503,7 +502,7 @@ class ModelInference:
             List of news articles
         """
         # Read from news Gold layer
-        news_path = Path("data/news/gold/news_signals/sp500_trading_signals.csv")
+        news_path = Path("data_clean/gold/news/signals/sp500_trading_signals.csv")
 
         if not news_path.exists():
             return []

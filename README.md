@@ -147,6 +147,61 @@ docker-compose down
 
 **For complete step-by-step instructions, see [docs/QUICKSTART.md](docs/QUICKSTART.md)**
 
+### Development Commands (Makefile)
+
+Common tasks are available through `make` commands for easier development:
+
+```bash
+# Setup and installation
+make setup                # Initial project setup (venv, dependencies)
+make install              # Install/update dependencies
+
+# Docker management
+make dev                  # Start development environment
+make stop                 # Stop all services
+make restart              # Restart with rebuild
+make docker-logs          # View service logs
+make health-check         # Check all service health
+
+# Code quality
+make test                 # Run all tests
+make test-coverage        # Run tests with coverage
+make lint                 # Run code linting
+make format               # Format code with black
+make typecheck            # Run type checking
+
+# Airflow operations
+make airflow-trigger      # Trigger main training DAG
+make airflow-trigger-alt  # Trigger alternative DAG
+make airflow-list         # List all DAGs
+
+# UI access
+make mlflow-ui            # Open MLflow (http://localhost:5001)
+make airflow-ui           # Open Airflow (http://localhost:8080)
+make streamlit-ui         # Open Streamlit (http://localhost:8501)
+
+# Feature store
+make feast-apply          # Apply Feast feature definitions
+make feast-materialize    # Materialize features
+
+# Validation
+make validate             # Run pipeline validation
+make test-e2e             # Run end-to-end tests
+make test-drift           # Run drift simulation
+
+# View help
+make help                 # See all available commands
+```
+
+**Example workflow:**
+```bash
+make setup                # One-time setup
+make dev                  # Start services
+make airflow-trigger      # Start training pipeline
+make mlflow-ui            # View experiments
+make stop                 # Stop when done
+```
+
 ---
 
 ## Performance Metrics
@@ -775,9 +830,14 @@ api_uptime > 99%
 ```
 fx-ml-pipeline/
 ├── README.md                    # This file
+├── CONTRIBUTING.md              # Contribution guidelines
+├── CHANGELOG.md                 # Version history
+├── CODE_OF_CONDUCT.md           # Community guidelines
+├── Makefile                     # Common development commands
+├── .editorconfig                # Editor configuration
 ├── requirements.txt             # Python 3.11 dependencies
 ├── docker-compose.yml           # Unified orchestration (16 services)
-├── .env.monitoring              # Email and monitoring configuration
+├── .env.monitoring.example      # Email configuration template
 │
 ├── src_clean/                   # Production code
 │   ├── data_pipelines/          # Bronze → Silver → Gold
@@ -803,11 +863,20 @@ fx-ml-pipeline/
 │       ├── sp500_ml_pipeline_v4_1_docker.py      # Alternative training DAG
 │       └── sp500_online_inference_pipeline.py    # Real-time inference DAG
 │
+├── scripts/                     # Operational scripts
+│   ├── start_all.sh             # Start all services
+│   ├── start_airflow_fixed.sh   # Start Airflow only
+│   ├── validate_pipeline.sh     # Pipeline validation
+│   ├── test_pipeline_e2e.sh     # End-to-end tests
+│   └── test_drift_simulation.sh # Drift testing
+│
 ├── docs/                        # Documentation
 │   ├── QUICKSTART.md            # Quick start guide
+│   ├── Technical_Report_MLOps.md        # Complete technical documentation
 │   ├── IMPLEMENTATION_SUMMARY.md
 │   ├── OPTIMIZATION_COMPLETE.md
 │   ├── GMAIL_APP_PASSWORD_SETUP.md
+│   ├── CLEANUP_REPORT_2025_11_07.md
 │   └── ... (all other docs)
 │
 ├── config/                      # Configuration files
@@ -816,19 +885,22 @@ fx-ml-pipeline/
 ├── data_clean/                  # Medallion data
 │   ├── bronze/                  # Raw data
 │   ├── silver/                  # Processed features
-│   └── gold/                    # Training-ready data
-│
-├── models/                      # Trained models
-│   ├── xgboost/                 # XGBoost models
-│   ├── lightgbm/                # LightGBM models
-│   ├── ar/                      # AutoRegressive OLS models
-│   └── production/              # Selected best model
-│       ├── best_model_*.pkl
-│       └── selection_info.json  # Model selection metadata
+│   ├── gold/                    # Training-ready data
+│   ├── models/                  # Trained models
+│   │   ├── xgboost/             # XGBoost models
+│   │   ├── lightgbm/            # LightGBM models
+│   │   ├── ar/                  # AutoRegressive OLS models
+│   │   └── production/          # Selected best model
+│   ├── predictions/             # Inference logs
+│   └── monitoring/              # Drift reports
 │
 ├── feature_repo/                # Feast feature definitions
 ├── mlruns/                      # MLflow experiment store
-└── logs/                        # Application logs
+├── logs/                        # Application logs
+└── archive_2025_11_07/          # Archived legacy directories
+    ├── legacy_data/             # Old data/ directory
+    ├── data_clean_5year_backup/ # 5-year data snapshot
+    └── legacy_configs/          # Old YAML configs
 ```
 
 ---
@@ -1193,3 +1265,119 @@ Educational and research purposes only. Not financial advice.
 | **Dependencies** | Python Packages | 162 packages in requirements.txt |
 | **Testing** | Test Coverage | 3 test modules + validation scripts |
 | **Deployment** | Model Stages | 4-stage lifecycle management |
+
+---
+
+## Contributing
+
+We welcome contributions from the community! Whether it's bug fixes, new features, documentation improvements, or suggestions, your input is valuable.
+
+### How to Contribute
+
+1. **Read the Guidelines**: Check [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines
+2. **Code of Conduct**: Follow our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+3. **Development Setup**: Follow the setup instructions in the contributing guide
+4. **Code Standards**:
+   - Python 3.11+, PEP 8 compliant
+   - 100 character line limit
+   - Type hints and Google-style docstrings
+   - 70% minimum test coverage for new code
+5. **Commit Messages**: Follow [Conventional Commits](https://www.conventionalcommits.org/)
+   - `feat:` for new features
+   - `fix:` for bug fixes
+   - `docs:` for documentation changes
+   - `refactor:` for code refactoring
+   - `test:` for adding tests
+
+### Quick Contribution Workflow
+
+```bash
+# 1. Fork and clone
+git clone https://github.com/YOUR_USERNAME/fx-ml-pipeline.git
+cd fx-ml-pipeline
+
+# 2. Create a feature branch
+git checkout -b feature/your-feature-name
+
+# 3. Make changes and test
+make test
+make lint
+
+# 4. Commit with conventional format
+git commit -m "feat: add LSTM model support"
+
+# 5. Push and create PR
+git push origin feature/your-feature-name
+```
+
+### Areas for Contribution
+
+- **Models**: Implement LSTM, Transformer, or other architectures
+- **Features**: Add new technical indicators or sentiment sources
+- **Infrastructure**: Improve Docker setup, add Kubernetes manifests
+- **Documentation**: Enhance guides, add tutorials, improve comments
+- **Testing**: Increase test coverage, add integration tests
+- **Monitoring**: Enhance drift detection, add performance metrics
+
+### Development Resources
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Complete contribution guide
+- [CHANGELOG.md](CHANGELOG.md) - Version history and changes
+- [docs/QUICKSTART.md](docs/QUICKSTART.md) - Quick start guide
+- [docs/Technical_Report_MLOps.md](docs/Technical_Report_MLOps.md) - Technical documentation
+
+### Reporting Issues
+
+Found a bug or have a suggestion? Please [open an issue](https://github.com/kht321/fx-ml-pipeline/issues) with:
+- Clear description of the problem
+- Steps to reproduce (for bugs)
+- Expected vs actual behavior
+- Environment details (OS, Python version, Docker version)
+- Relevant logs from `logs/` directory
+
+---
+
+## License
+
+This project is for educational and research purposes. See [LICENSE](LICENSE) for details.
+
+**Important Notes:**
+- This is a demonstration project showcasing MLOps best practices
+- Not intended for production trading without significant additional validation
+- Financial data and predictions are for educational purposes only
+- No warranty or guarantee of accuracy is provided
+
+---
+
+## Acknowledgments
+
+**Technologies Used:**
+- [Apache Airflow](https://airflow.apache.org/) - Workflow orchestration
+- [MLflow](https://mlflow.org/) - Experiment tracking and model registry
+- [Feast](https://feast.dev/) - Feature store
+- [Evidently AI](https://www.evidentlyai.com/) - Model monitoring
+- [FastAPI](https://fastapi.tiangolo.com/) - REST API framework
+- [Streamlit](https://streamlit.io/) - Interactive dashboards
+- [XGBoost](https://xgboost.readthedocs.io/) & [LightGBM](https://lightgbm.readthedocs.io/) - Gradient boosting
+- [FinBERT](https://github.com/ProsusAI/finBERT) - Financial sentiment analysis
+
+**Data Sources:**
+- [OANDA](https://www.oanda.com/) - Market data
+- [NewsAPI](https://newsapi.org/) - Financial news
+- [Financial Modeling Prep](https://financialmodelingprep.com/) - Market data
+- [Polygon.io](https://polygon.io/) - Market data
+
+---
+
+## Contact
+
+**Project Maintainer:** Kevin Taukoor ([@kht321](https://github.com/kht321))
+
+**Links:**
+- GitHub: [https://github.com/kht321/fx-ml-pipeline](https://github.com/kht321/fx-ml-pipeline)
+- Issues: [https://github.com/kht321/fx-ml-pipeline/issues](https://github.com/kht321/fx-ml-pipeline/issues)
+- Documentation: [docs/](docs/)
+
+---
+
+**⭐ If you find this project helpful, please consider giving it a star!**

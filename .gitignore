@@ -27,15 +27,8 @@ logs/
 mlruns/
 mlartifacts/
 
-# Large data files (download using scripts instead)
-data/bronze/prices/*.ndjson
-data/bronze/prices/*.backup
-data/silver/**/*.parquet
-data/gold/**/*.parquet
-data/sp500/
-data/news/bronze/simulated/
-data/news/gold/
-data/news/silver/
+# Legacy directories (moved to archive)
+# data/ directory has been archived
 
 # New clean data structure (exclude large files)
 data_clean/bronze/market/*.ndjson
@@ -58,10 +51,8 @@ data_clean/models/*
 outputs/
 *.csv
 *.pkl
-!data_clean_5year/models/*.pkl
-!data_clean_5year/models/*.csv
-!data_clean_5year/models/*.png
 *.joblib
+# data_clean_5year has been archived
 
 # OS files
 .DS_Store
@@ -77,11 +68,11 @@ airflow_logs/
 data_clean/*.zip
 *.zip
 *.db
-# Exclude 5-year test outputs except models
-data_clean_5year/bronze/
-data_clean_5year/silver/
-data_clean_5year/gold/
-data_clean_5year/training_outputs/
+# Legacy 5-year data (archived)
+# data_clean_5year directory moved to archive_2025_11_07/
+
+# Archive directory (local backup only - too large for GitHub)
+archive_2025_11_07/
 notebooks/xgb_test/hyperparameters/sp500_prediction/shap_feature_importance.png
 notebooks/xgb_test/hyperparameters/sp500_prediction/shap_summary.json
 notebooks/xgb_test/hyperparameters/sp500_prediction/stage1_summary.json
